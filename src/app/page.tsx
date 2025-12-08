@@ -42,6 +42,7 @@ export default function Home() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if (!isAuthenticated()) {
+        setIsAuthChecked(true); // Set to true to allow redirect
         router.push('/login');
       } else {
         setIsAuthChecked(true);

@@ -149,6 +149,65 @@ export default function DraggablePreviewCanvas({
     [image, getAnchorPoint]
   );
 
+  // Hit test to find which layer was clicked
+  const hitTestLayer = useCallback(
+    (canvasX: number, canvasY: number): WatermarkLayer | null => {
+      if (!image || !canvasRef.current) return null;
+
+      const canvas = canvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = image.width / rect.width;
+      const scaleY = image.height / rect.height;
+
+      const actualX = canvasX * scaleX;
+      const actualY = canvasY * scaleY;
+
+      // Check layers in reverse order (topmost first)
+      for (let i = layers.length - 1; i >= 0; i--) {
+        const layer = layers[i];
+        const anchorPoint = getAnchorPoint(layer.anchor, image.width, image.height);
+        const offsetX = (layer.offsetX / 100) * image.width;
+        const offsetY = (layer.offsetY / 100) * image.height;
+        const layerX = anchorPoint.x + offsetX;
+        const layerY = anchorPoint.y + offsetY;
+
+        // Calculate layer bounds (approximate)
+        let layerWidth = 0;
+        let layerHeight = 0;
+
+        if (layer.type === 'text' && layer.text) {
+          // For text, estimate bounds based on font size
+          const fontSize = (layer.fontSize || 24) * layer.scale;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.font = `${fontSize}px ${layer.fontFamily || 'Inter'}`;
+            layerWidth = ctx.measureText(layer.text).width;
+            layerHeight = fontSize;
+          }
+        } else if (layer.type === 'logo' && layer.logoImage) {
+          // For logo, use actual image dimensions scaled
+          layerWidth = layer.logoImage.width * layer.scale;
+          layerHeight = layer.logoImage.height * layer.scale;
+        }
+
+        // Account for rotation - use a bounding box approach
+        // For simplicity, use a generous hit area (2x the layer size)
+        const hitRadius = Math.max(layerWidth, layerHeight) * 1.5;
+
+        const dx = actualX - layerX;
+        const dy = actualY - layerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= hitRadius) {
+          return layer;
+        }
+      }
+
+      return null;
+    },
+    [image, layers, getAnchorPoint]
+  );
+
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!image || !canvasRef.current) return;
 
@@ -157,14 +216,16 @@ export default function DraggablePreviewCanvas({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Check if clicking on a layer (simple hit test)
-    // For now, select the first layer that might be near the click
-    // In a full implementation, you'd do proper hit testing
-    if (layers.length > 0) {
-      const clickedLayer = layers[0]; // Simplified - would need proper hit testing
+    // Perform hit test to find clicked layer
+    const clickedLayer = hitTestLayer(x, y);
+    
+    if (clickedLayer) {
       onLayerSelect(clickedLayer.id);
       setIsDragging(true);
       setDragStart({ x, y });
+    } else {
+      // Clicked on empty space - deselect
+      onLayerSelect(null);
     }
   };
 

@@ -53,11 +53,12 @@ export default function PresetsPanel({ currentLayers, onLayersLoad }: PresetsPan
       return;
     }
 
-    if (confirm(`Delete preset "${selectedPreset}"?`)) {
-      deletePreset(selectedPreset);
+    const presetNameToDelete = selectedPreset; // Capture before clearing
+    if (confirm(`Delete preset "${presetNameToDelete}"?`)) {
+      deletePreset(presetNameToDelete);
       setPresets(loadAllPresets());
       setSelectedPreset('');
-      alert(`Preset "${selectedPreset}" deleted`);
+      alert(`Preset "${presetNameToDelete}" deleted`);
     }
   };
 
