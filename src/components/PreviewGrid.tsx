@@ -1,21 +1,22 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ProcessedImage, WatermarkConfig, applyWatermark } from '@/lib/watermarkEngine';
+import { ProcessedImage, WatermarkLayer, applyWatermarkLayers } from '@/lib/watermarkEngine';
 
 interface PreviewGridProps {
   images: ProcessedImage[];
-  watermarkConfig: WatermarkConfig;
+  layers: WatermarkLayer[];
   onDownloadSingle: (imageId: string) => void;
+  onImageSelect: (image: ProcessedImage | null) => void;
 }
 
-export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle }: PreviewGridProps) {
+export default function PreviewGrid({ images, layers, onDownloadSingle, onImageSelect }: PreviewGridProps) {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [selectedImage, setSelectedImage] = useState<ProcessedImage | null>(null);
   const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null);
   const previewCacheRef = useRef<Record<string, string>>({});
 
-  // Generate previews when config or images change
+  // Generate previews when layers or images change
   useEffect(() => {
     const generatePreviews = async () => {
       const newPreviews: Record<string, string> = {};
@@ -23,7 +24,7 @@ export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle 
       for (const img of images) {
         if (!img.originalDataUrl || img.error) continue;
 
-        const cacheKey = `${img.id}-${JSON.stringify(watermarkConfig)}`;
+        const cacheKey = `${img.id}-${JSON.stringify(layers)}`;
         
         // Check cache first
         if (previewCacheRef.current[cacheKey]) {
@@ -34,9 +35,9 @@ export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle 
         try {
           // Generate preview at reduced resolution for performance
           const previewScale = 0.3; // 30% size for preview
-          const dataUrl = await applyWatermark(
+          const dataUrl = await applyWatermarkLayers(
             img.originalDataUrl,
-            watermarkConfig,
+            layers,
             true,
             previewScale
           ) as string;
@@ -54,17 +55,28 @@ export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle 
       setPreviewUrls(newPreviews);
     };
 
-    generatePreviews();
-  }, [images, watermarkConfig]);
+    if (layers.length > 0) {
+      generatePreviews();
+    } else {
+      // If no layers, just show original images
+      const originals: Record<string, string> = {};
+      images.forEach((img) => {
+        if (img.originalDataUrl) {
+          originals[img.id] = img.originalDataUrl;
+        }
+      });
+      setPreviewUrls(originals);
+    }
+  }, [images, layers]);
 
   const handleImageClick = async (image: ProcessedImage) => {
     if (!image.originalDataUrl || image.error) return;
 
     try {
       // Generate full-resolution preview for modal
-      const fullPreview = await applyWatermark(
+      const fullPreview = await applyWatermarkLayers(
         image.originalDataUrl,
-        watermarkConfig,
+        layers,
         true,
         1.0
       ) as string;
@@ -73,6 +85,11 @@ export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle 
     } catch (error) {
       console.error('Error generating full preview', error);
     }
+  };
+
+  const handleImageSelect = (image: ProcessedImage) => {
+    setSelectedImage(image);
+    onImageSelect(image);
   };
 
   if (images.length === 0) {
@@ -87,15 +104,20 @@ export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle 
     <>
       <div className="grid grid-cols-2 gap-4">
         {images.map((img) => {
-          const previewUrl = previewUrls[img.id];
+          const previewUrl = previewUrls[img.id] || img.originalDataUrl;
           const hasError = !!img.error;
           const isProcessed = !!img.processedBlob;
 
           return (
             <div
               key={img.id}
-              className="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden hover:border-primary transition-colors cursor-pointer"
-              onClick={() => handleImageClick(img)}
+              className={`bg-gray-900 border rounded-lg overflow-hidden hover:border-primary transition-colors cursor-pointer ${
+                selectedImage?.id === img.id ? 'border-primary' : 'border-gray-700'
+              }`}
+              onClick={() => {
+                handleImageClick(img);
+                handleImageSelect(img);
+              }}
             >
               <div className="relative aspect-square bg-gray-800">
                 {previewUrl ? (
@@ -185,4 +207,3 @@ export default function PreviewGrid({ images, watermarkConfig, onDownloadSingle 
     </>
   );
 }
-

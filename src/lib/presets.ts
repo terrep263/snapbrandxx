@@ -1,14 +1,14 @@
 /**
  * Presets Management - localStorage-based preset storage
  * 
- * Handles saving and loading watermark presets for quick client-specific configurations
+ * Handles saving and loading watermark layer presets for quick client-specific configurations
  */
 
-import { WatermarkConfig } from './watermarkEngine';
+import { WatermarkLayer } from './watermarkEngine';
 
 export interface Preset {
   name: string;
-  config: WatermarkConfig;
+  layers: WatermarkLayer[];
 }
 
 const PRESETS_STORAGE_KEY = 'snapbrandxx-ops-presets';
@@ -16,11 +16,20 @@ const PRESETS_STORAGE_KEY = 'snapbrandxx-ops-presets';
 /**
  * Save a preset to localStorage
  */
-export function savePreset(name: string, config: WatermarkConfig): void {
+export function savePreset(name: string, layers: WatermarkLayer[]): void {
   const presets = loadAllPresets();
   const existingIndex = presets.findIndex((p) => p.name === name);
   
-  const preset: Preset = { name, config };
+  // Serialize layers, but exclude HTMLImageElement (can't be serialized)
+  const serializableLayers = layers.map((layer) => {
+    const { logoImage, ...rest } = layer;
+    return {
+      ...rest,
+      logoImageDataUrl: logoImage ? null : null, // Will need to be reloaded
+    };
+  });
+  
+  const preset: Preset = { name, layers: serializableLayers as WatermarkLayer[] };
   
   if (existingIndex >= 0) {
     presets[existingIndex] = preset;
@@ -47,10 +56,10 @@ export function loadAllPresets(): Preset[] {
 /**
  * Load a specific preset by name
  */
-export function loadPreset(name: string): WatermarkConfig | null {
+export function loadPreset(name: string): WatermarkLayer[] | null {
   const presets = loadAllPresets();
   const preset = presets.find((p) => p.name === name);
-  return preset ? preset.config : null;
+  return preset ? preset.layers : null;
 }
 
 /**
@@ -61,4 +70,3 @@ export function deletePreset(name: string): void {
   const filtered = presets.filter((p) => p.name !== name);
   localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(filtered));
 }
-

@@ -6,9 +6,11 @@ import OrderPanel from '@/components/OrderPanel';
 import UploadPanel from '@/components/UploadPanel';
 import PreviewGrid from '@/components/PreviewGrid';
 import WatermarkSettingsPanel from '@/components/WatermarkSettingsPanel';
+import LayerListPanel from '@/components/LayerListPanel';
+import LayerEditorPanel from '@/components/LayerEditorPanel';
+import DraggablePreviewCanvas from '@/components/DraggablePreviewCanvas';
 import PresetsPanel from '@/components/PresetsPanel';
-import { WatermarkConfig, ProcessedImage } from '@/lib/watermarkEngine';
-import { applyWatermark } from '@/lib/watermarkEngine';
+import { WatermarkLayer, ProcessedImage, Anchor, TileMode, applyWatermarkLayers } from '@/lib/watermarkEngine';
 import { isAuthenticated, logout } from '@/lib/auth';
 import JSZip from 'jszip';
 
@@ -19,17 +21,9 @@ export default function Home() {
   const [orderId, setOrderId] = useState('');
   const [notes, setNotes] = useState('');
   const [images, setImages] = useState<ProcessedImage[]>([]);
-  const [watermarkConfig, setWatermarkConfig] = useState<WatermarkConfig>({
-    mode: 'text',
-    text: 'Your Brand',
-    fontFamily: 'Inter',
-    fontSize: 24,
-    opacity: 0.7,
-    position: 'bottom-right',
-    marginX: 20,
-    marginY: 20,
-    logoImage: null,
-  });
+  const [layers, setLayers] = useState<WatermarkLayer[]>([]);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [selectedPreviewImage, setSelectedPreviewImage] = useState<ProcessedImage | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -57,13 +51,23 @@ export default function Home() {
         img.src = e.target?.result as string;
         img.onload = () => {
           logoImageRef.current = img;
-          setWatermarkConfig((prev) => ({ ...prev, logoImage: img }));
+          // Update all logo layers with the new image
+          setLayers((prevLayers) =>
+            prevLayers.map((layer) =>
+              layer.type === 'logo' ? { ...layer, logoImage: img } : layer
+            )
+          );
         };
       };
       reader.readAsDataURL(logoFile);
     } else {
       logoImageRef.current = null;
-      setWatermarkConfig((prev) => ({ ...prev, logoImage: null }));
+      // Remove logo from all logo layers
+      setLayers((prevLayers) =>
+        prevLayers.map((layer) =>
+          layer.type === 'logo' ? { ...layer, logoImage: null } : layer
+        )
+      );
     }
   }, [logoFile]);
 
@@ -79,11 +83,75 @@ export default function Home() {
 
   const handleImagesUploaded = useCallback((newImages: ProcessedImage[]) => {
     setImages(newImages);
-  }, []);
+    // Auto-select first image for preview canvas
+    if (newImages.length > 0 && !selectedPreviewImage) {
+      setSelectedPreviewImage(newImages[0]);
+    }
+  }, [selectedPreviewImage]);
+
+  const handleAddTextLayer = () => {
+    const newLayer: WatermarkLayer = {
+      id: `text-${Date.now()}-${Math.random()}`,
+      type: 'text',
+      anchor: Anchor.BOTTOM_RIGHT,
+      offsetX: -5, // 5% from right
+      offsetY: -5, // 5% from bottom
+      scale: 1.0,
+      rotation: 0,
+      opacity: 0.7,
+      tileMode: TileMode.NONE,
+      effect: '',
+      text: 'Your Brand',
+      fontFamily: 'Inter',
+      fontSize: 24,
+      color: '#ffffff',
+    };
+    setLayers((prev) => [...prev, newLayer]);
+    setSelectedLayerId(newLayer.id);
+  };
+
+  const handleAddLogoLayer = () => {
+    if (!logoImageRef.current) {
+      alert('Please upload a logo first');
+      return;
+    }
+    const newLayer: WatermarkLayer = {
+      id: `logo-${Date.now()}-${Math.random()}`,
+      type: 'logo',
+      anchor: Anchor.BOTTOM_RIGHT,
+      offsetX: -5,
+      offsetY: -5,
+      scale: 1.0,
+      rotation: 0,
+      opacity: 0.7,
+      tileMode: TileMode.NONE,
+      effect: '',
+      logoImage: logoImageRef.current,
+    };
+    setLayers((prev) => [...prev, newLayer]);
+    setSelectedLayerId(newLayer.id);
+  };
+
+  const handleLayerUpdate = (updatedLayer: WatermarkLayer) => {
+    setLayers((prev) =>
+      prev.map((layer) => (layer.id === updatedLayer.id ? updatedLayer : layer))
+    );
+  };
+
+  const handleLayerDelete = (layerId: string) => {
+    setLayers((prev) => prev.filter((layer) => layer.id !== layerId));
+    if (selectedLayerId === layerId) {
+      setSelectedLayerId(null);
+    }
+  };
 
   const handleGenerateWatermarked = async () => {
     if (images.length === 0) {
       alert('Please upload images first');
+      return;
+    }
+    if (layers.length === 0) {
+      alert('Please add at least one watermark layer');
       return;
     }
 
@@ -94,9 +162,9 @@ export default function Home() {
 
     for (let i = 0; i < updatedImages.length; i++) {
       try {
-        const blob = await applyWatermark(
+        const blob = await applyWatermarkLayers(
           updatedImages[i].originalDataUrl,
-          watermarkConfig,
+          layers,
           false,
           1.0
         ) as Blob;
@@ -167,6 +235,7 @@ export default function Home() {
   };
 
   const canExport = images.some((img) => img.processedBlob);
+  const selectedLayer = layers.find((l) => l.id === selectedLayerId) || null;
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
@@ -231,20 +300,31 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Center Column - Preview Grid */}
+        {/* Center Column - Preview Grid & Canvas */}
         <div className="w-[45%] flex flex-col border-r border-gray-700 overflow-y-auto">
-          <div className="p-4">
+          <div className="p-4 space-y-4">
+            {/* Draggable Preview Canvas */}
+            <DraggablePreviewCanvas
+              image={selectedPreviewImage}
+              layers={layers}
+              selectedLayerId={selectedLayerId}
+              onLayerSelect={setSelectedLayerId}
+              onLayerUpdate={handleLayerUpdate}
+            />
+            
+            {/* Preview Grid */}
             <PreviewGrid
               images={images}
-              watermarkConfig={watermarkConfig}
+              layers={layers}
               onDownloadSingle={handleDownloadSingle}
+              onImageSelect={setSelectedPreviewImage}
             />
           </div>
           <div className="p-4 border-t border-gray-700 bg-gray-900">
             <div className="flex gap-3">
               <button
                 onClick={handleGenerateWatermarked}
-                disabled={isProcessing || images.length === 0}
+                disabled={isProcessing || images.length === 0 || layers.length === 0}
                 className="flex-1 px-4 py-2 bg-primary hover:bg-primary-dark disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded transition-colors"
               >
                 {isProcessing
@@ -262,17 +342,30 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right Column - Settings & Presets */}
+        {/* Right Column - Layers & Settings */}
         <div className="w-[30%] flex flex-col overflow-y-auto">
           <div className="p-4 space-y-4">
+            <LayerListPanel
+              layers={layers}
+              selectedLayerId={selectedLayerId}
+              onLayerSelect={setSelectedLayerId}
+              onAddTextLayer={handleAddTextLayer}
+              onAddLogoLayer={handleAddLogoLayer}
+            />
+            <LayerEditorPanel
+              layer={selectedLayer}
+              onLayerUpdate={handleLayerUpdate}
+              onDeleteLayer={handleLayerDelete}
+            />
             <WatermarkSettingsPanel
-              config={watermarkConfig}
-              onConfigChange={setWatermarkConfig}
+              layers={layers}
+              onLayersChange={setLayers}
               onLogoFileChange={setLogoFile}
+              logoImage={logoImageRef.current}
             />
             <PresetsPanel
-              currentConfig={watermarkConfig}
-              onConfigLoad={setWatermarkConfig}
+              currentLayers={layers}
+              onLayersLoad={setLayers}
             />
           </div>
         </div>
@@ -280,4 +373,3 @@ export default function Home() {
     </div>
   );
 }
-

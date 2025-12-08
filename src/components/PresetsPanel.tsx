@@ -1,15 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { WatermarkConfig } from '@/lib/watermarkEngine';
+import { WatermarkLayer } from '@/lib/watermarkEngine';
 import { savePreset, loadAllPresets, loadPreset, deletePreset, Preset } from '@/lib/presets';
 
 interface PresetsPanelProps {
-  currentConfig: WatermarkConfig;
-  onConfigLoad: (config: WatermarkConfig) => void;
+  currentLayers: WatermarkLayer[];
+  onLayersLoad: (layers: WatermarkLayer[]) => void;
 }
 
-export default function PresetsPanel({ currentConfig, onConfigLoad }: PresetsPanelProps) {
+export default function PresetsPanel({ currentLayers, onLayersLoad }: PresetsPanelProps) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [presetName, setPresetName] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('');
@@ -24,7 +24,7 @@ export default function PresetsPanel({ currentConfig, onConfigLoad }: PresetsPan
       return;
     }
 
-    savePreset(presetName.trim(), currentConfig);
+    savePreset(presetName.trim(), currentLayers);
     setPresets(loadAllPresets());
     setPresetName('');
     alert(`Preset "${presetName.trim()}" saved`);
@@ -36,9 +36,11 @@ export default function PresetsPanel({ currentConfig, onConfigLoad }: PresetsPan
       return;
     }
 
-    const config = loadPreset(selectedPreset);
-    if (config) {
-      onConfigLoad(config);
+    const layers = loadPreset(selectedPreset);
+    if (layers) {
+      // Note: Logo images won't be restored from localStorage
+      // User will need to re-upload logos
+      onLayersLoad(layers);
       alert(`Preset "${selectedPreset}" loaded`);
     } else {
       alert('Failed to load preset');
@@ -65,7 +67,7 @@ export default function PresetsPanel({ currentConfig, onConfigLoad }: PresetsPan
       <div className="space-y-4">
         {/* Save Preset */}
         <div>
-          <label className="block text-xs text-gray-400 mb-1">Save Current Settings</label>
+          <label className="block text-xs text-gray-400 mb-1">Save Current Layers</label>
           <div className="flex gap-2">
             <input
               type="text"
@@ -127,11 +129,10 @@ export default function PresetsPanel({ currentConfig, onConfigLoad }: PresetsPan
 
         {presets.length === 0 && (
           <p className="text-xs text-gray-500 text-center py-4">
-            No presets saved yet. Save your current settings to create one.
+            No presets saved yet. Save your current layers to create one.
           </p>
         )}
       </div>
     </div>
   );
 }
-
