@@ -1,19 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { WatermarkLayer, Anchor } from '@/lib/watermarkEngine';
-
-interface WatermarkSettingsPanelProps {
-  layers: WatermarkLayer[];
-  onLayersChange: (layers: WatermarkLayer[]) => void;
-  onLogoFileChange: (file: File | null) => void;
-  logoImage: HTMLImageElement | null;
-}
-
-'use client';
-
-import { useRef } from 'react';
-import { WatermarkLayer, Anchor, TileMode } from '@/lib/watermarkEngine';
+import { WatermarkLayer } from '@/lib/watermarkEngine';
 
 interface WatermarkSettingsPanelProps {
   layers: WatermarkLayer[];
@@ -105,4 +93,3 @@ export default function WatermarkSettingsPanel({
     </div>
   );
 }
-
