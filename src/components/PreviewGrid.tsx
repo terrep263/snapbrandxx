@@ -1,90 +1,135 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ProcessedImage, WatermarkLayer, applyWatermarkLayers } from '@/lib/watermarkEngine';
 
 interface PreviewGridProps {
   images: ProcessedImage[];
-  layers: WatermarkLayer[];
+  globalLayers: WatermarkLayer[];
+  overrides: Record<string, WatermarkLayer[]>;
   onDownloadSingle: (imageId: string) => void;
   onImageSelect: (image: ProcessedImage | null) => void;
+  onImageClick: (image: ProcessedImage) => void;
 }
 
-export default function PreviewGrid({ images, layers, onDownloadSingle, onImageSelect }: PreviewGridProps) {
+export default function PreviewGrid({
+  images,
+  globalLayers,
+  overrides,
+  onDownloadSingle,
+  onImageSelect,
+  onImageClick,
+}: PreviewGridProps) {
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [selectedImage, setSelectedImage] = useState<ProcessedImage | null>(null);
   const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null);
   const previewCacheRef = useRef<Record<string, string>>({});
+  const generatingRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Generate previews when layers or images change
+  // Get layers for a specific image
+  const getLayersForImage = useCallback(
+    (imageId: string): WatermarkLayer[] => {
+      return overrides[imageId] || globalLayers;
+    },
+    [overrides, globalLayers]
+  );
+
+  // Generate previews with debouncing and batching for performance
   useEffect(() => {
+    if (generatingRef.current) {
+      // Cancel previous generation
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    generatingRef.current = true;
+
     const generatePreviews = async () => {
       const newPreviews: Record<string, string> = {};
+      const batchSize = 10; // Process 10 images at a time
+      let processed = 0;
 
-      for (const img of images) {
-        if (!img.originalDataUrl || img.error) continue;
+      for (let i = 0; i < images.length; i += batchSize) {
+        if (controller.signal.aborted) break;
 
-        const cacheKey = `${img.id}-${JSON.stringify(layers)}`;
-        
-        // Check cache first
-        if (previewCacheRef.current[cacheKey]) {
-          newPreviews[img.id] = previewCacheRef.current[cacheKey];
-          continue;
+        const batch = images.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (img) => {
+          if (!img.originalDataUrl || img.error) return;
+
+          const layersToUse = getLayersForImage(img.id);
+          if (layersToUse.length === 0) {
+            newPreviews[img.id] = img.originalDataUrl;
+            return;
+          }
+
+          const cacheKey = `${img.id}-${JSON.stringify(layersToUse)}`;
+
+          // Check cache first
+          if (previewCacheRef.current[cacheKey]) {
+            newPreviews[img.id] = previewCacheRef.current[cacheKey];
+            return;
+          }
+
+          try {
+            // Generate preview at reduced resolution for performance
+            const previewScale = 0.25; // 25% size for better performance with many images
+            const dataUrl = await applyWatermarkLayers(
+              img.originalDataUrl,
+              layersToUse,
+              true,
+              previewScale
+            ) as string;
+
+            if (!controller.signal.aborted) {
+              previewCacheRef.current[cacheKey] = dataUrl;
+              newPreviews[img.id] = dataUrl;
+            }
+          } catch (error) {
+            if (error instanceof Error && error.name !== 'AbortError') {
+              console.error('Error generating preview for', img.id, error);
+            }
+          }
+        });
+
+        await Promise.all(batchPromises);
+        processed += batch.length;
+
+        // Update UI incrementally for better perceived performance
+        if (!controller.signal.aborted && processed > 0) {
+          setPreviewUrls((prev) => ({ ...prev, ...newPreviews }));
         }
 
-        try {
-          // Generate preview at reduced resolution for performance
-          const previewScale = 0.3; // 30% size for preview
-          const dataUrl = await applyWatermarkLayers(
-            img.originalDataUrl,
-            layers,
-            true,
-            previewScale
-          ) as string;
-
-          previewCacheRef.current[cacheKey] = dataUrl;
-          newPreviews[img.id] = dataUrl;
-        } catch (error) {
-          console.error('Error generating preview for', img.id, error);
-        }
-
-        // Yield to event loop periodically
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        // Yield to event loop between batches
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
-      setPreviewUrls(newPreviews);
+      if (!controller.signal.aborted) {
+        setPreviewUrls(newPreviews);
+        generatingRef.current = false;
+      }
     };
 
-    if (layers.length > 0) {
+    // Debounce: wait 300ms before starting generation
+    const timeoutId = setTimeout(() => {
       generatePreviews();
-    } else {
-      // If no layers, just show original images
-      const originals: Record<string, string> = {};
-      images.forEach((img) => {
-        if (img.originalDataUrl) {
-          originals[img.id] = img.originalDataUrl;
-        }
-      });
-      setPreviewUrls(originals);
-    }
-  }, [images, layers]);
+    }, 300);
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+      generatingRef.current = false;
+    };
+  }, [images, globalLayers, overrides, getLayersForImage]);
 
   const handleImageClick = async (image: ProcessedImage) => {
     if (!image.originalDataUrl || image.error) return;
 
-    try {
-      // Generate full-resolution preview for modal
-      const fullPreview = await applyWatermarkLayers(
-        image.originalDataUrl,
-        layers,
-        true,
-        1.0
-      ) as string;
-      setSelectedPreviewUrl(fullPreview);
-      setSelectedImage(image);
-    } catch (error) {
-      console.error('Error generating full preview', error);
-    }
+    // Open detail editor instead of modal
+    onImageClick(image);
   };
 
   const handleImageSelect = (image: ProcessedImage) => {
@@ -107,6 +152,7 @@ export default function PreviewGrid({ images, layers, onDownloadSingle, onImageS
           const previewUrl = previewUrls[img.id] || img.originalDataUrl;
           const hasError = !!img.error;
           const isProcessed = !!img.processedBlob;
+          const hasOverride = !!overrides[img.id];
 
           return (
             <div
@@ -125,6 +171,7 @@ export default function PreviewGrid({ images, layers, onDownloadSingle, onImageS
                     src={previewUrl}
                     alt={img.originalFile.name}
                     className="w-full h-full object-contain"
+                    loading="lazy"
                   />
                 ) : hasError ? (
                   <div className="w-full h-full flex items-center justify-center">
@@ -133,6 +180,11 @@ export default function PreviewGrid({ images, layers, onDownloadSingle, onImageS
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <p className="text-xs text-gray-500">Generating preview...</p>
+                  </div>
+                )}
+                {hasOverride && (
+                  <div className="absolute top-2 left-2 bg-accent text-white text-xs px-2 py-1 rounded font-medium">
+                    Custom
                   </div>
                 )}
                 {isProcessed && (
@@ -166,44 +218,6 @@ export default function PreviewGrid({ images, layers, onDownloadSingle, onImageS
           );
         })}
       </div>
-
-      {/* Modal for full-size preview */}
-      {selectedImage && selectedPreviewUrl && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-          onClick={() => {
-            setSelectedImage(null);
-            setSelectedPreviewUrl(null);
-          }}
-        >
-          <div
-            className="bg-gray-900 rounded-lg max-w-4xl max-h-[90vh] overflow-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-gray-300">
-                {selectedImage.originalFile.name}
-              </h3>
-              <button
-                onClick={() => {
-                  setSelectedImage(null);
-                  setSelectedPreviewUrl(null);
-                }}
-                className="text-gray-400 hover:text-white"
-              >
-                ×
-              </button>
-            </div>
-            <div className="p-4">
-              <img
-                src={selectedPreviewUrl}
-                alt={selectedImage.originalFile.name}
-                className="max-w-full h-auto"
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -1,12 +1,46 @@
 /**
  * Watermark Engine - Client-side watermark rendering utility
  * 
- * This module provides pure functions for applying watermarks to images
- * using HTML5 Canvas. Used for both previews and final export.
+ * Layer-based watermark system with drag placement and advanced controls
  */
 
-export type WatermarkMode = 'text' | 'logo' | 'text+logo';
+export enum Anchor {
+  TOP_LEFT = 'TOP_LEFT',
+  TOP_RIGHT = 'TOP_RIGHT',
+  BOTTOM_LEFT = 'BOTTOM_LEFT',
+  BOTTOM_RIGHT = 'BOTTOM_RIGHT',
+  CENTER = 'CENTER',
+}
 
+export enum TileMode {
+  NONE = 'none',
+  // Placeholder for future tile modes
+}
+
+export interface WatermarkLayer {
+  id: string;
+  type: 'text' | 'logo';
+  anchor: Anchor;
+  offsetX: number; // Percentage of image width (-50 to 50)
+  offsetY: number; // Percentage of image height (-50 to 50)
+  scale: number; // Scale factor (0.1 to 5.0)
+  rotation: number; // Rotation in degrees (0-360)
+  opacity: number; // Opacity (0.0-1.0)
+  tileMode: TileMode;
+  effect: string; // Placeholder for future effects
+  
+  // Text layer properties
+  text?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  color?: string;
+  
+  // Logo layer properties
+  logoImage?: HTMLImageElement | null;
+}
+
+// Legacy support - keep for backward compatibility during migration
+export type WatermarkMode = 'text' | 'logo' | 'text+logo';
 export type WatermarkPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
 
 export interface WatermarkConfig {
@@ -57,44 +91,25 @@ export async function loadImage(source: File | string): Promise<HTMLImageElement
 }
 
 /**
- * Calculate watermark coordinates based on position and margins
+ * Calculate anchor point coordinates
  */
-function calculateWatermarkPosition(
-  position: WatermarkPosition,
-  marginX: number,
-  marginY: number,
+function getAnchorPoint(
+  anchor: Anchor,
   canvasWidth: number,
-  canvasHeight: number,
-  watermarkWidth: number,
-  watermarkHeight: number
+  canvasHeight: number
 ): { x: number; y: number } {
-  let x = 0;
-  let y = 0;
-
-  switch (position) {
-    case 'top-left':
-      x = marginX;
-      y = marginY;
-      break;
-    case 'top-right':
-      x = canvasWidth - watermarkWidth - marginX;
-      y = marginY;
-      break;
-    case 'bottom-left':
-      x = marginX;
-      y = canvasHeight - watermarkHeight - marginY;
-      break;
-    case 'bottom-right':
-      x = canvasWidth - watermarkWidth - marginX;
-      y = canvasHeight - watermarkHeight - marginY;
-      break;
-    case 'center':
-      x = (canvasWidth - watermarkWidth) / 2;
-      y = (canvasHeight - watermarkHeight) / 2;
-      break;
+  switch (anchor) {
+    case Anchor.TOP_LEFT:
+      return { x: 0, y: 0 };
+    case Anchor.TOP_RIGHT:
+      return { x: canvasWidth, y: 0 };
+    case Anchor.BOTTOM_LEFT:
+      return { x: 0, y: canvasHeight };
+    case Anchor.BOTTOM_RIGHT:
+      return { x: canvasWidth, y: canvasHeight };
+    case Anchor.CENTER:
+      return { x: canvasWidth / 2, y: canvasHeight / 2 };
   }
-
-  return { x, y };
 }
 
 /**
@@ -115,16 +130,84 @@ function measureText(
 }
 
 /**
- * Apply watermark to an image
+ * Render a single watermark layer onto canvas
+ */
+function renderLayer(
+  ctx: CanvasRenderingContext2D,
+  layer: WatermarkLayer,
+  canvasWidth: number,
+  canvasHeight: number,
+  scale: number = 1.0
+): void {
+  // Get anchor point
+  const anchorPoint = getAnchorPoint(layer.anchor, canvasWidth, canvasHeight);
+  
+  // Calculate position with offsets (as percentages)
+  const offsetX = (layer.offsetX / 100) * canvasWidth;
+  const offsetY = (layer.offsetY / 100) * canvasHeight;
+  const baseX = anchorPoint.x + offsetX;
+  const baseY = anchorPoint.y + offsetY;
+  
+  // Set opacity
+  ctx.globalAlpha = layer.opacity;
+  
+  // Save context for transformations
+  ctx.save();
+  
+  // Move to layer position
+  ctx.translate(baseX, baseY);
+  
+  // Apply rotation
+  const rotationRad = (layer.rotation * Math.PI) / 180;
+  ctx.rotate(rotationRad);
+  
+  // Apply scale
+  const finalScale = layer.scale * scale;
+  ctx.scale(finalScale, finalScale);
+  
+  if (layer.type === 'text' && layer.text) {
+    // Render text layer
+    const fontSize = (layer.fontSize || 24) * scale;
+    ctx.font = `${fontSize}px ${layer.fontFamily || 'Inter'}`;
+    ctx.fillStyle = layer.color || '#ffffff';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = Math.max(1, fontSize * 0.05);
+    
+    // Draw text with outline for visibility
+    ctx.strokeText(layer.text, 0, fontSize);
+    ctx.fillText(layer.text, 0, fontSize);
+  } else if (layer.type === 'logo' && layer.logoImage) {
+    // Render logo layer
+    const logoWidth = layer.logoImage.width;
+    const logoHeight = layer.logoImage.height;
+    
+    // Center the logo at origin (since we're already translated)
+    ctx.drawImage(
+      layer.logoImage,
+      -logoWidth / 2,
+      -logoHeight / 2,
+      logoWidth,
+      logoHeight
+    );
+  }
+  
+  // Restore context
+  ctx.restore();
+  ctx.globalAlpha = 1.0;
+}
+
+/**
+ * Apply watermarks (layers) to an image
  * 
  * @param sourceImage - The source image (File, data URL, or HTMLImageElement)
- * @param config - Watermark configuration
+ * @param layers - Array of WatermarkLayer objects
+ * @param returnDataUrl - If true, returns data URL; otherwise returns Blob
  * @param scale - Optional scale factor for preview (1.0 = full resolution)
  * @returns Promise resolving to Blob (for export) or data URL (for preview)
  */
-export async function applyWatermark(
+export async function applyWatermarkLayers(
   sourceImage: File | string | HTMLImageElement,
-  config: WatermarkConfig,
+  layers: WatermarkLayer[],
   returnDataUrl: boolean = false,
   scale: number = 1.0
 ): Promise<Blob | string> {
@@ -151,96 +234,13 @@ export async function applyWatermark(
   // Draw the original image
   ctx.drawImage(img, 0, 0, width, height);
 
-  // Calculate watermark dimensions and position
-  let watermarkWidth = 0;
-  let watermarkHeight = 0;
-  const scaledFontSize = config.fontSize * scale;
-  const scaledMarginX = config.marginX * scale;
-  const scaledMarginY = config.marginY * scale;
-
-  // Measure text if needed
-  if (config.mode === 'text' || config.mode === 'text+logo') {
-    ctx.font = `${scaledFontSize}px ${config.fontFamily}`;
-    const textMetrics = measureText(ctx, config.text, config.fontFamily, scaledFontSize);
-    watermarkWidth = textMetrics.width;
-    watermarkHeight = textMetrics.height;
-  }
-
-  // Add logo dimensions if needed
-  if (config.mode === 'logo' || config.mode === 'text+logo') {
-    if (config.logoImage) {
-      const logoScale = Math.min(
-        (width * 0.2) / config.logoImage.width,
-        (height * 0.2) / config.logoImage.height,
-        1.0
-      );
-      const logoWidth = config.logoImage.width * logoScale;
-      const logoHeight = config.logoImage.height * logoScale;
-
-      if (config.mode === 'text+logo') {
-        // Place text and logo side by side
-        watermarkWidth += logoWidth + scaledFontSize * 0.5; // Add spacing
-        watermarkHeight = Math.max(watermarkHeight, logoHeight);
-      } else {
-        watermarkWidth = logoWidth;
-        watermarkHeight = logoHeight;
-      }
+  // Render each layer
+  for (const layer of layers) {
+    if (layer.tileMode === TileMode.NONE) {
+      renderLayer(ctx, layer, width, height, scale);
     }
+    // Future: handle other tile modes here
   }
-
-  // Calculate position
-  const { x, y } = calculateWatermarkPosition(
-    config.position,
-    scaledMarginX,
-    scaledMarginY,
-    width,
-    height,
-    watermarkWidth,
-    watermarkHeight
-  );
-
-  // Set opacity
-  ctx.globalAlpha = config.opacity;
-
-  // Draw watermark based on mode
-  if (config.mode === 'text' || config.mode === 'text+logo') {
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = Math.max(1, scaledFontSize * 0.05);
-    ctx.font = `${scaledFontSize}px ${config.fontFamily}`;
-    
-    // Draw text with outline for visibility
-    ctx.strokeText(config.text, x, y + scaledFontSize);
-    ctx.fillText(config.text, x, y + scaledFontSize);
-  }
-
-  if (config.mode === 'logo' || config.mode === 'text+logo') {
-    if (config.logoImage) {
-      const logoScale = Math.min(
-        (width * 0.2) / config.logoImage.width,
-        (height * 0.2) / config.logoImage.height,
-        1.0
-      );
-      const logoWidth = config.logoImage.width * logoScale;
-      const logoHeight = config.logoImage.height * logoScale;
-
-      let logoX = x;
-      let logoY = y;
-
-      if (config.mode === 'text+logo') {
-        // Place logo next to text
-        ctx.font = `${scaledFontSize}px ${config.fontFamily}`;
-        const textWidth = ctx.measureText(config.text).width;
-        logoX = x + textWidth + scaledFontSize * 0.5;
-        logoY = y + (watermarkHeight - logoHeight) / 2;
-      }
-
-      ctx.drawImage(config.logoImage, logoX, logoY, logoWidth, logoHeight);
-    }
-  }
-
-  // Reset opacity
-  ctx.globalAlpha = 1.0;
 
   // Return result
   if (returnDataUrl) {
@@ -262,3 +262,70 @@ export async function applyWatermark(
   }
 }
 
+/**
+ * Legacy function for backward compatibility
+ * Converts old WatermarkConfig to WatermarkLayer array
+ */
+export function configToLayers(config: WatermarkConfig): WatermarkLayer[] {
+  const layers: WatermarkLayer[] = [];
+  
+  const anchorMap: Record<WatermarkPosition, Anchor> = {
+    'top-left': Anchor.TOP_LEFT,
+    'top-right': Anchor.TOP_RIGHT,
+    'bottom-left': Anchor.BOTTOM_LEFT,
+    'bottom-right': Anchor.BOTTOM_RIGHT,
+    'center': Anchor.CENTER,
+  };
+  
+  if (config.mode === 'text' || config.mode === 'text+logo') {
+    layers.push({
+      id: `text-${Date.now()}`,
+      type: 'text',
+      anchor: anchorMap[config.position],
+      offsetX: (config.marginX / 100) * 10, // Rough conversion from pixels to percentage
+      offsetY: (config.marginY / 100) * 10,
+      scale: 1.0,
+      rotation: 0,
+      opacity: config.opacity,
+      tileMode: TileMode.NONE,
+      effect: '',
+      text: config.text,
+      fontFamily: config.fontFamily,
+      fontSize: config.fontSize,
+      color: '#ffffff',
+    });
+  }
+  
+  if (config.mode === 'logo' || config.mode === 'text+logo') {
+    if (config.logoImage) {
+      layers.push({
+        id: `logo-${Date.now()}`,
+        type: 'logo',
+        anchor: anchorMap[config.position],
+        offsetX: (config.marginX / 100) * 10,
+        offsetY: (config.marginY / 100) * 10,
+        scale: 1.0,
+        rotation: 0,
+        opacity: config.opacity,
+        tileMode: TileMode.NONE,
+        effect: '',
+        logoImage: config.logoImage,
+      });
+    }
+  }
+  
+  return layers;
+}
+
+/**
+ * Legacy applyWatermark function for backward compatibility
+ */
+export async function applyWatermark(
+  sourceImage: File | string | HTMLImageElement,
+  config: WatermarkConfig,
+  returnDataUrl: boolean = false,
+  scale: number = 1.0
+): Promise<Blob | string> {
+  const layers = configToLayers(config);
+  return applyWatermarkLayers(sourceImage, layers, returnDataUrl, scale);
+}

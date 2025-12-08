@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { WatermarkLayer, ProcessedImage, Anchor, applyWatermarkLayers } from '@/lib/watermarkEngine';
+import { WatermarkLayer, ProcessedImage, Anchor, TileMode, applyWatermarkLayers } from '@/lib/watermarkEngine';
 import LayerListPanel from './LayerListPanel';
 import LayerEditorPanel from './LayerEditorPanel';
 import DraggablePreviewCanvas from './DraggablePreviewCanvas';
@@ -29,37 +29,21 @@ export default function ImageDetailEditor({
     imageLayers.length > 0 ? imageLayers : globalLayers
   );
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const logoImageRef = useRef<HTMLImageElement | null>(null);
-
   // Update layers when props change
   useEffect(() => {
     setLayers(imageLayers.length > 0 ? imageLayers : globalLayers);
   }, [imageLayers, globalLayers]);
 
-  // Load logo image when file changes
+  // Update logo images in layers when logoImage prop changes
   useEffect(() => {
-    if (logoFile) {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          logoImageRef.current = img;
-          // Update all logo layers
-          setLayers((prevLayers) =>
-            prevLayers.map((layer) =>
-              layer.type === 'logo' ? { ...layer, logoImage: img } : layer
-            )
-          );
-        };
-      };
-      reader.readAsDataURL(logoFile);
-    } else {
-      logoImageRef.current = null;
+    if (logoImage) {
+      setLayers((prevLayers) =>
+        prevLayers.map((layer) =>
+          layer.type === 'logo' ? { ...layer, logoImage } : layer
+        )
+      );
     }
-  }, [logoFile]);
+  }, [logoImage]);
 
   const handleAddTextLayer = () => {
     const newLayer: WatermarkLayer = {
@@ -71,7 +55,7 @@ export default function ImageDetailEditor({
       scale: 1.0,
       rotation: 0,
       opacity: 0.7,
-      tileMode: 'none' as any,
+      tileMode: TileMode.NONE,
       effect: '',
       text: 'Your Brand',
       fontFamily: 'Inter',
@@ -83,7 +67,7 @@ export default function ImageDetailEditor({
   };
 
   const handleAddLogoLayer = () => {
-    if (!logoImageRef.current && !logoImage) {
+    if (!logoImage) {
       alert('Please upload a logo first');
       return;
     }
@@ -96,9 +80,9 @@ export default function ImageDetailEditor({
       scale: 1.0,
       rotation: 0,
       opacity: 0.7,
-      tileMode: 'none' as any,
+      tileMode: TileMode.NONE,
       effect: '',
-      logoImage: logoImageRef.current || logoImage,
+      logoImage: logoImage,
     };
     setLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);

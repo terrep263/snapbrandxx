@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import OrderPanel from '@/components/OrderPanel';
 import UploadPanel from '@/components/UploadPanel';
 import PreviewGrid from '@/components/PreviewGrid';
+import ImageDetailEditor from '@/components/ImageDetailEditor';
 import WatermarkSettingsPanel from '@/components/WatermarkSettingsPanel';
 import LayerListPanel from '@/components/LayerListPanel';
 import LayerEditorPanel from '@/components/LayerEditorPanel';
@@ -21,9 +22,16 @@ export default function Home() {
   const [orderId, setOrderId] = useState('');
   const [notes, setNotes] = useState('');
   const [images, setImages] = useState<ProcessedImage[]>([]);
-  const [layers, setLayers] = useState<WatermarkLayer[]>([]);
+  
+  // Global layers (default for all images)
+  const [globalLayers, setGlobalLayers] = useState<WatermarkLayer[]>([]);
+  
+  // Per-image overrides: overrides[imageId] = WatermarkLayer[]
+  const [overrides, setOverrides] = useState<Record<string, WatermarkLayer[]>>({});
+  
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [selectedPreviewImage, setSelectedPreviewImage] = useState<ProcessedImage | null>(null);
+  const [editingImageId, setEditingImageId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingProgress, setProcessingProgress] = useState({ current: 0, total: 0 });
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -51,23 +59,27 @@ export default function Home() {
         img.src = e.target?.result as string;
         img.onload = () => {
           logoImageRef.current = img;
-          // Update all logo layers with the new image
-          setLayers((prevLayers) =>
+          // Update all logo layers in global layers
+          setGlobalLayers((prevLayers) =>
             prevLayers.map((layer) =>
               layer.type === 'logo' ? { ...layer, logoImage: img } : layer
             )
           );
+          // Update logo layers in all overrides
+          setOverrides((prevOverrides) => {
+            const updated: Record<string, WatermarkLayer[]> = {};
+            Object.entries(prevOverrides).forEach(([imageId, layers]) => {
+              updated[imageId] = layers.map((layer) =>
+                layer.type === 'logo' ? { ...layer, logoImage: img } : layer
+              );
+            });
+            return updated;
+          });
         };
       };
       reader.readAsDataURL(logoFile);
     } else {
       logoImageRef.current = null;
-      // Remove logo from all logo layers
-      setLayers((prevLayers) =>
-        prevLayers.map((layer) =>
-          layer.type === 'logo' ? { ...layer, logoImage: null } : layer
-        )
-      );
     }
   }, [logoFile]);
 
@@ -94,8 +106,8 @@ export default function Home() {
       id: `text-${Date.now()}-${Math.random()}`,
       type: 'text',
       anchor: Anchor.BOTTOM_RIGHT,
-      offsetX: -5, // 5% from right
-      offsetY: -5, // 5% from bottom
+      offsetX: -5,
+      offsetY: -5,
       scale: 1.0,
       rotation: 0,
       opacity: 0.7,
@@ -106,7 +118,7 @@ export default function Home() {
       fontSize: 24,
       color: '#ffffff',
     };
-    setLayers((prev) => [...prev, newLayer]);
+    setGlobalLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);
   };
 
@@ -128,20 +140,43 @@ export default function Home() {
       effect: '',
       logoImage: logoImageRef.current,
     };
-    setLayers((prev) => [...prev, newLayer]);
+    setGlobalLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);
   };
 
-  const handleLayerUpdate = (updatedLayer: WatermarkLayer) => {
-    setLayers((prev) =>
+  const handleGlobalLayerUpdate = (updatedLayer: WatermarkLayer) => {
+    setGlobalLayers((prev) =>
       prev.map((layer) => (layer.id === updatedLayer.id ? updatedLayer : layer))
     );
   };
 
-  const handleLayerDelete = (layerId: string) => {
-    setLayers((prev) => prev.filter((layer) => layer.id !== layerId));
+  const handleGlobalLayerDelete = (layerId: string) => {
+    setGlobalLayers((prev) => prev.filter((layer) => layer.id !== layerId));
     if (selectedLayerId === layerId) {
       setSelectedLayerId(null);
+    }
+  };
+
+  // Get layers for a specific image (overrides or global)
+  const getLayersForImage = useCallback((imageId: string): WatermarkLayer[] => {
+    return overrides[imageId] || globalLayers;
+  }, [overrides, globalLayers]);
+
+  // Handle image override update
+  const handleImageLayersUpdate = (imageId: string, layers: WatermarkLayer[] | null) => {
+    if (layers === null) {
+      // Reset to global - remove override
+      setOverrides((prev) => {
+        const updated = { ...prev };
+        delete updated[imageId];
+        return updated;
+      });
+    } else {
+      // Set override
+      setOverrides((prev) => ({
+        ...prev,
+        [imageId]: layers,
+      }));
     }
   };
 
@@ -150,7 +185,7 @@ export default function Home() {
       alert('Please upload images first');
       return;
     }
-    if (layers.length === 0) {
+    if (globalLayers.length === 0) {
       alert('Please add at least one watermark layer');
       return;
     }
@@ -162,9 +197,17 @@ export default function Home() {
 
     for (let i = 0; i < updatedImages.length; i++) {
       try {
+        // Use overrides if available, otherwise use global layers
+        const layersToUse = getLayersForImage(updatedImages[i].id);
+        
+        if (layersToUse.length === 0) {
+          // Skip if no layers
+          continue;
+        }
+
         const blob = await applyWatermarkLayers(
           updatedImages[i].originalDataUrl,
-          layers,
+          layersToUse,
           false,
           1.0
         ) as Blob;
@@ -234,8 +277,13 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const handleImageClick = (image: ProcessedImage) => {
+    setEditingImageId(image.id);
+  };
+
   const canExport = images.some((img) => img.processedBlob);
-  const selectedLayer = layers.find((l) => l.id === selectedLayerId) || null;
+  const selectedLayer = globalLayers.find((l) => l.id === selectedLayerId) || null;
+  const editingImage = editingImageId ? images.find((img) => img.id === editingImageId) : null;
 
   const handleLogout = () => {
     if (confirm('Are you sure you want to logout?')) {
@@ -280,6 +328,19 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Image Detail Editor Modal */}
+      {editingImage && (
+        <ImageDetailEditor
+          image={editingImage}
+          globalLayers={globalLayers}
+          imageLayers={overrides[editingImage.id] || []}
+          onLayersUpdate={handleImageLayersUpdate}
+          onClose={() => setEditingImageId(null)}
+          logoImage={logoImageRef.current}
+          onLogoFileChange={setLogoFile}
+        />
+      )}
+
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Column - Order & Upload */}
@@ -306,25 +367,27 @@ export default function Home() {
             {/* Draggable Preview Canvas */}
             <DraggablePreviewCanvas
               image={selectedPreviewImage}
-              layers={layers}
+              layers={selectedPreviewImage ? getLayersForImage(selectedPreviewImage.id) : globalLayers}
               selectedLayerId={selectedLayerId}
               onLayerSelect={setSelectedLayerId}
-              onLayerUpdate={handleLayerUpdate}
+              onLayerUpdate={handleGlobalLayerUpdate}
             />
             
             {/* Preview Grid */}
             <PreviewGrid
               images={images}
-              layers={layers}
+              globalLayers={globalLayers}
+              overrides={overrides}
               onDownloadSingle={handleDownloadSingle}
               onImageSelect={setSelectedPreviewImage}
+              onImageClick={handleImageClick}
             />
           </div>
           <div className="p-4 border-t border-gray-700 bg-gray-900">
             <div className="flex gap-3">
               <button
                 onClick={handleGenerateWatermarked}
-                disabled={isProcessing || images.length === 0 || layers.length === 0}
+                disabled={isProcessing || images.length === 0 || globalLayers.length === 0}
                 className="flex-1 px-4 py-2 bg-primary hover:bg-primary-dark disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded transition-colors"
               >
                 {isProcessing
@@ -342,11 +405,17 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right Column - Layers & Settings */}
+        {/* Right Column - Global Layers & Settings */}
         <div className="w-[30%] flex flex-col overflow-y-auto">
           <div className="p-4 space-y-4">
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-3">
+              <h2 className="text-sm font-semibold text-gray-300 mb-2">Global Watermark Settings</h2>
+              <p className="text-xs text-gray-500">
+                These settings apply to all images unless overridden
+              </p>
+            </div>
             <LayerListPanel
-              layers={layers}
+              layers={globalLayers}
               selectedLayerId={selectedLayerId}
               onLayerSelect={setSelectedLayerId}
               onAddTextLayer={handleAddTextLayer}
@@ -354,18 +423,18 @@ export default function Home() {
             />
             <LayerEditorPanel
               layer={selectedLayer}
-              onLayerUpdate={handleLayerUpdate}
-              onDeleteLayer={handleLayerDelete}
+              onLayerUpdate={handleGlobalLayerUpdate}
+              onDeleteLayer={handleGlobalLayerDelete}
             />
             <WatermarkSettingsPanel
-              layers={layers}
-              onLayersChange={setLayers}
+              layers={globalLayers}
+              onLayersChange={setGlobalLayers}
               onLogoFileChange={setLogoFile}
               logoImage={logoImageRef.current}
             />
             <PresetsPanel
-              currentLayers={layers}
-              onLayersLoad={setLayers}
+              currentLayers={globalLayers}
+              onLayersLoad={setGlobalLayers}
             />
           </div>
         </div>
