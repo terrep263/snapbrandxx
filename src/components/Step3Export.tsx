@@ -38,10 +38,7 @@ export default function Step3Export({
   /**
    * Process images in batches for better performance
    */
-  const processBatch = async (
-    imagesToProcess: ProcessedImage[],
-    batchSize: number = 5
-  ): Promise<ProcessedImage[]> {
+  const processBatch = async (imagesToProcess: ProcessedImage[], batchSize = 5) => {
     const results: ProcessedImage[] = [];
 
     for (let i = 0; i < imagesToProcess.length; i += batchSize) {
