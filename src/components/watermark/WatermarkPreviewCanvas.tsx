@@ -182,8 +182,7 @@ export default function WatermarkPreviewCanvas({
         image.originalDataUrl,
         layers,
         logoLibrary,
-        true, // returnDataUrl
-        0.5 // 50% scale for preview performance
+        { scale: 0.5, returnDataUrl: true } // 50% scale for preview performance
       ) as string;
 
       const img = new Image();

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { WatermarkGroup, getAllGroups, saveCustomGroup, deleteCustomGroup, cloneGroupLayers } from '@/lib/watermarkGroups';
-import { WatermarkLayer } from '@/lib/watermarkEngine';
+import { WatermarkLayer } from '@/lib/watermark/types';
 import { LogoItem } from '@/lib/logoLibrary';
 
 interface WatermarkGroupsPanelProps {

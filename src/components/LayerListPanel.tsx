@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { WatermarkLayer } from '@/lib/watermarkEngine';
+import { WatermarkLayer } from '@/lib/watermark/types';
 import LogoGallery from './LogoGallery';
 import { LogoItem, logoItemToImage } from '@/lib/logoLibrary';
 

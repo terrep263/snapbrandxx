@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { WatermarkLayer, ProcessedImage, Anchor, TileMode } from '@/lib/watermarkEngine';
+import { WatermarkLayer, ProcessedImage, Anchor, TileMode } from '@/lib/watermark/types';
 import { FontRecord } from '@/lib/fontLibrary';
 import DraggablePreviewCanvas from './DraggablePreviewCanvas';
 import LayerListPanel from './LayerListPanel';
@@ -69,9 +69,14 @@ export default function Step2Editor({
   }, [images, selectedImageId, onSelectedImageChange]);
 
   const handleAddTextLayer = () => {
+    const maxZIndex = globalLayers.length > 0
+      ? Math.max(...globalLayers.map(l => l.zIndex))
+      : 0;
     const newLayer: WatermarkLayer = {
       id: `text-${Date.now()}-${Math.random()}`,
       type: 'text',
+      zIndex: maxZIndex + 1,
+      enabled: true,
       anchor: Anchor.BOTTOM_RIGHT,
       offsetX: -5,
       offsetY: -5,
@@ -79,10 +84,10 @@ export default function Step2Editor({
       rotation: 0,
       opacity: 0.7,
       tileMode: TileMode.NONE,
-      effect: '',
+      effect: 'solid',
       text: 'Your Brand',
       fontFamily: 'Inter',
-      fontSize: 24,
+      fontSizeRelative: 3.0, // 3% of image height
       color: '#ffffff',
     };
     onGlobalLayersChange([...globalLayers, newLayer]);
@@ -90,14 +95,21 @@ export default function Step2Editor({
   };
 
   const handleAddLogoLayer = (logoImageParam?: HTMLImageElement) => {
+    // Note: For backward compatibility, this accepts HTMLImageElement
+    // In the future, this should be updated to accept logoId from the logo library
     const logoToUse = logoImageParam || logoImage;
     if (!logoToUse) {
       alert('Please upload a logo first or select one from the library');
       return;
     }
+    const maxZIndex = globalLayers.length > 0
+      ? Math.max(...globalLayers.map(l => l.zIndex))
+      : 0;
     const newLayer: WatermarkLayer = {
       id: `logo-${Date.now()}-${Math.random()}`,
       type: 'logo',
+      zIndex: maxZIndex + 1,
+      enabled: true,
       anchor: Anchor.BOTTOM_RIGHT,
       offsetX: -5,
       offsetY: -5,
@@ -105,8 +117,10 @@ export default function Step2Editor({
       rotation: 0,
       opacity: 0.7,
       tileMode: TileMode.NONE,
-      effect: '',
-      logoImage: logoToUse,
+      effect: 'solid',
+      logoId: 'temp-logo-id', // TODO: Get actual logoId from logo library when logoImageParam is provided
+      naturalLogoWidth: logoToUse.naturalWidth || 100,
+      naturalLogoHeight: logoToUse.naturalHeight || 100,
     };
     onGlobalLayersChange([...globalLayers, newLayer]);
     setSelectedLayerId(newLayer.id);

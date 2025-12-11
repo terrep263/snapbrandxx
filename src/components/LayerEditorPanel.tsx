@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { WatermarkLayer, Anchor } from '@/lib/watermarkEngine';
+import { WatermarkLayer, Anchor } from '@/lib/watermark/types';
 import { FontRecord, getAllFonts, loadFont } from '@/lib/fontLibrary';
 
 interface LayerEditorPanelProps {
@@ -240,19 +240,20 @@ export default function LayerEditorPanel({
             </div>
             <div>
               <label className="block text-xs text-gray-400 mb-1">
-                Font Size: {layer.fontSize || 24}px
+                Font Size: {layer.fontSizeRelative ? `${layer.fontSizeRelative.toFixed(1)}%` : '3.0%'} of image height
               </label>
               <input
                 type="range"
-                min="12"
-                max="142"
-                value={layer.fontSize || 24}
-                onChange={(e) => updateLayer({ fontSize: parseInt(e.target.value) })}
+                min="0.5"
+                max="15"
+                step="0.1"
+                value={layer.fontSizeRelative || 3.0}
+                onChange={(e) => updateLayer({ fontSizeRelative: parseFloat(e.target.value) })}
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>12px</span>
-                <span>142px</span>
+                <span>0.5%</span>
+                <span>15%</span>
               </div>
             </div>
             <div>

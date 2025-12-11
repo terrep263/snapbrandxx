@@ -4,7 +4,7 @@
  * Handles saving and loading watermark layer presets for quick client-specific configurations
  */
 
-import { WatermarkLayer } from './watermarkEngine';
+import { WatermarkLayer } from './watermark/types';
 
 export interface Preset {
   name: string;
@@ -20,12 +20,13 @@ export function savePreset(name: string, layers: WatermarkLayer[]): void {
   const presets = loadAllPresets();
   const existingIndex = presets.findIndex((p) => p.name === name);
   
-  // Serialize layers, but exclude HTMLImageElement (can't be serialized)
+  // Serialize layers - logoId is already serializable, no need to exclude anything
   const serializableLayers = layers.map((layer) => {
-    const { logoImage, ...rest } = layer;
+    // Ensure all required properties are present
     return {
-      ...rest,
-      logoImageDataUrl: logoImage ? null : null, // Will need to be reloaded
+      ...layer,
+      zIndex: layer.zIndex ?? 0,
+      enabled: layer.enabled ?? true,
     };
   });
   

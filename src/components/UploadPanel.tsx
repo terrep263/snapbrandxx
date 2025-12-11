@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import NextImage from 'next/image';
-import { ProcessedImage } from '@/lib/watermarkEngine';
+import { ProcessedImage } from '@/lib/watermark/types';
 
 interface UploadPanelProps {
   images: ProcessedImage[];

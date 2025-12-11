@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import OrderPanel from './OrderPanel';
 import UploadPanel from './UploadPanel';
-import { ProcessedImage } from '@/lib/watermarkEngine';
+import { ProcessedImage } from '@/lib/watermark/types';
 
 interface Step1OrderImagesProps {
   clientName: string;

@@ -3,7 +3,7 @@
  * Predefined and custom templates for watermark layouts
  */
 
-import { WatermarkLayer, Anchor, TileMode } from './watermarkEngine';
+import { WatermarkLayer, Anchor, TileMode } from './watermark/types';
 
 export interface WatermarkGroup {
   id: string;
@@ -25,6 +25,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
       {
         id: 'logo-1',
         type: 'logo',
+        zIndex: 0,
+        enabled: true,
         anchor: Anchor.CENTER,
         offsetX: 0,
         offsetY: 10,
@@ -32,12 +34,16 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.8,
         tileMode: TileMode.NONE,
-        effect: '',
-        logoImage: null as any, // Will be replaced when used
+        effect: 'solid',
+        logoId: 'placeholder', // Will be replaced when used
+        naturalLogoWidth: 100,
+        naturalLogoHeight: 100,
       },
       {
         id: 'text-name',
         type: 'text',
+        zIndex: 1,
+        enabled: true,
         anchor: Anchor.CENTER,
         offsetX: 0,
         offsetY: 5,
@@ -45,15 +51,17 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.9,
         tileMode: TileMode.NONE,
-        effect: '',
+        effect: 'solid',
         text: 'Your Name',
         fontFamily: 'Inter',
-        fontSize: 32,
+        fontSizeRelative: 4.0, // 4% of image height
         color: '#ffffff',
       },
       {
         id: 'text-title',
         type: 'text',
+        zIndex: 2,
+        enabled: true,
         anchor: Anchor.CENTER,
         offsetX: 0,
         offsetY: -5,
@@ -61,10 +69,10 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.8,
         tileMode: TileMode.NONE,
-        effect: '',
+        effect: 'solid',
         text: 'Your Title',
         fontFamily: 'Inter',
-        fontSize: 24,
+        fontSizeRelative: 3.0, // 3% of image height
         color: '#ffffff',
       },
     ],
@@ -78,6 +86,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
       {
         id: 'text-name',
         type: 'text',
+        zIndex: 0,
+        enabled: true,
         anchor: Anchor.BOTTOM_RIGHT,
         offsetX: -5,
         offsetY: -25,
@@ -85,15 +95,17 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.9,
         tileMode: TileMode.NONE,
-        effect: '',
+        effect: 'solid',
         text: 'Your Name',
         fontFamily: 'Inter',
-        fontSize: 28,
+        fontSizeRelative: 3.5, // 3.5% of image height
         color: '#ffffff',
       },
       {
         id: 'text-website',
         type: 'text',
+        zIndex: 1,
+        enabled: true,
         anchor: Anchor.BOTTOM_RIGHT,
         offsetX: -5,
         offsetY: -5,
@@ -101,10 +113,10 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.8,
         tileMode: TileMode.NONE,
-        effect: '',
+        effect: 'solid',
         text: 'www.yoursite.com',
         fontFamily: 'Inter',
-        fontSize: 20,
+        fontSizeRelative: 2.5, // 2.5% of image height
         color: '#ffffff',
       },
     ],
@@ -118,6 +130,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
       {
         id: 'logo-1',
         type: 'logo',
+        zIndex: 0,
+        enabled: true,
         anchor: Anchor.BOTTOM_RIGHT,
         offsetX: -5,
         offsetY: -5,
@@ -125,8 +139,10 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.7,
         tileMode: TileMode.NONE,
-        effect: '',
-        logoImage: null as any,
+        effect: 'solid',
+        logoId: 'placeholder', // Will be replaced when used
+        naturalLogoWidth: 100,
+        naturalLogoHeight: 100,
       },
     ],
   },
@@ -139,6 +155,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
       {
         id: 'text-1',
         type: 'text',
+        zIndex: 0,
+        enabled: true,
         anchor: Anchor.BOTTOM_RIGHT,
         offsetX: -5,
         offsetY: -5,
@@ -146,10 +164,10 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         rotation: 0,
         opacity: 0.8,
         tileMode: TileMode.NONE,
-        effect: '',
+        effect: 'solid',
         text: 'Your Brand',
         fontFamily: 'Inter',
-        fontSize: 24,
+        fontSizeRelative: 3.0, // 3% of image height
         color: '#ffffff',
       },
     ],
@@ -239,9 +257,12 @@ export function cloneGroupLayers(
       }
     }
 
-    // Replace logo image if provided
+    // Replace logo if provided (note: logoId should be passed instead of logoImage in future)
     if (cloned.type === 'logo' && replacements.logoImage) {
-      cloned.logoImage = replacements.logoImage;
+      // For now, we keep logoId as placeholder since we don't have logoId from HTMLImageElement
+      // In the future, this should accept logoId directly
+      cloned.naturalLogoWidth = replacements.logoImage.naturalWidth || 100;
+      cloned.naturalLogoHeight = replacements.logoImage.naturalHeight || 100;
     }
 
     return cloned;

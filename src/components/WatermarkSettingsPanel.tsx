@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { WatermarkLayer } from '@/lib/watermarkEngine';
+import { WatermarkLayer } from '@/lib/watermark/types';
 
 interface WatermarkSettingsPanelProps {
   layers: WatermarkLayer[];

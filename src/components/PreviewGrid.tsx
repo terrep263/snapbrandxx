@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
-import { ProcessedImage, WatermarkLayer, applyWatermarkLayers } from '@/lib/watermarkEngine';
+import { ProcessedImage, WatermarkLayer } from '@/lib/watermark/types';
+import { applyWatermarkLayers } from '@/lib/watermark/engine';
+import { useWatermark } from '@/lib/watermark/context';
 
 interface PreviewGridProps {
   images: ProcessedImage[];
@@ -21,6 +23,7 @@ export default function PreviewGrid({
   onImageSelect,
   onImageClick,
 }: PreviewGridProps) {
+  const { logoLibrary } = useWatermark();
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [selectedImage, setSelectedImage] = useState<ProcessedImage | null>(null);
   const [selectedPreviewUrl, setSelectedPreviewUrl] = useState<string | null>(null);
@@ -81,8 +84,8 @@ export default function PreviewGrid({
             const dataUrl = await applyWatermarkLayers(
               img.originalDataUrl,
               layersToUse,
-              true,
-              previewScale
+              logoLibrary,
+              { scale: previewScale, returnDataUrl: true }
             ) as string;
 
             if (!controller.signal.aborted) {
@@ -124,7 +127,7 @@ export default function PreviewGrid({
       controller.abort();
       generatingRef.current = false;
     };
-  }, [images, globalLayers, overrides, getLayersForImage]);
+  }, [images, globalLayers, overrides, getLayersForImage, logoLibrary]);
 
   const handleImageClick = async (image: ProcessedImage) => {
     if (!image.originalDataUrl || image.error) return;

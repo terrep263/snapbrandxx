@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { WatermarkLayer, ProcessedImage, Anchor, TileMode } from '@/lib/watermark/types';
-import { applyWatermarkLayers } from '@/lib/watermark/engine';
 import { FontRecord } from '@/lib/fontLibrary';
 import LayerListPanel from './LayerListPanel';
 import LayerEditorPanel from './LayerEditorPanel';
@@ -45,21 +44,22 @@ export default function ImageDetailEditor({
     }
   }, [imageLayers, globalLayers]);
 
-  // Update logo images in layers when logoImage prop changes
+  // Note: Logo updates should be handled via logoId, not logoImage
+  // This effect is kept for backward compatibility but may need refactoring
   useEffect(() => {
-    if (logoImage) {
-      setLayers((prevLayers) =>
-        prevLayers.map((layer) =>
-          layer.type === 'logo' && layer.logoId ? { ...layer } : layer
-        )
-      );
-    }
+    // Logo updates should be handled through the logo library context
+    // This effect is deprecated
   }, [logoImage]);
 
   const handleAddTextLayer = () => {
+    const maxZIndex = layers.length > 0
+      ? Math.max(...layers.map(l => l.zIndex))
+      : 0;
     const newLayer: WatermarkLayer = {
       id: `text-${Date.now()}-${Math.random()}`,
       type: 'text',
+      zIndex: maxZIndex + 1,
+      enabled: true,
       anchor: Anchor.BOTTOM_RIGHT,
       offsetX: -5,
       offsetY: -5,
@@ -70,24 +70,29 @@ export default function ImageDetailEditor({
       effect: 'solid',
       text: 'Your Brand',
       fontFamily: 'Inter',
-      fontSizeRelative: 3.0,
+      fontSizeRelative: 3.0, // 3% of image height
       color: '#ffffff',
-      zIndex: 0,
-      enabled: true,
     };
     setLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);
   };
 
   const handleAddLogoLayer = (logoImageParam?: HTMLImageElement) => {
+    // Note: For backward compatibility, this accepts HTMLImageElement
+    // In the future, this should be updated to accept logoId from the logo library
     const logoToUse = logoImageParam || logoImage;
     if (!logoToUse) {
       alert('Please upload a logo first or select one from the library');
       return;
     }
+    const maxZIndex = layers.length > 0
+      ? Math.max(...layers.map(l => l.zIndex))
+      : 0;
     const newLayer: WatermarkLayer = {
       id: `logo-${Date.now()}-${Math.random()}`,
       type: 'logo',
+      zIndex: maxZIndex + 1,
+      enabled: true,
       anchor: Anchor.BOTTOM_RIGHT,
       offsetX: -5,
       offsetY: -5,
@@ -96,11 +101,9 @@ export default function ImageDetailEditor({
       opacity: 0.7,
       tileMode: TileMode.NONE,
       effect: 'solid',
-      logoId: 'temp',
-      naturalLogoWidth: logoToUse.width,
-      naturalLogoHeight: logoToUse.height,
-      zIndex: 0,
-      enabled: true,
+      logoId: 'temp-logo-id', // TODO: Get actual logoId from logo library when logoImageParam is provided
+      naturalLogoWidth: logoToUse.naturalWidth || 100,
+      naturalLogoHeight: logoToUse.naturalHeight || 100,
     };
     setLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);

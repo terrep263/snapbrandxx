@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { WatermarkLayer } from '@/lib/watermarkEngine';
+import { WatermarkLayer } from '@/lib/watermark/types';
 import { savePreset, loadAllPresets, loadPreset, deletePreset, Preset } from '@/lib/presets';
 
 interface PresetsPanelProps {
