@@ -142,7 +142,7 @@ export default function Home() {
         )}
 
         {currentStep === 2 && (
-          <div className="h-full animate-fade-in">
+          <div className="h-full w-full animate-fade-in overflow-hidden">
             <WatermarkProvider>
               <WatermarkEditor
                 images={images}

@@ -86,9 +86,9 @@ export default function WatermarkControlPanel({
     : false;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="p-4 border-b border-gray-700 bg-gray-900">
+      <div className="p-4 border-b border-gray-700 bg-gray-900 flex-shrink-0">
         <div className="mb-4">
           <h2 className="text-xl font-bold text-gray-100 mb-1">Watermark Editor</h2>
           <p className="text-xs text-gray-400">
@@ -151,7 +151,7 @@ export default function WatermarkControlPanel({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
         {activeTab === 'layers' && (
           <div className="p-4 space-y-4">
             <LayerListSection
@@ -189,7 +189,7 @@ export default function WatermarkControlPanel({
 
       {/* Footer Actions */}
       {(onBack || onNext) && (
-        <div className="p-4 border-t border-gray-700 bg-gray-900 flex justify-between">
+        <div className="p-4 border-t border-gray-700 bg-gray-900 flex justify-between flex-shrink-0">
           {onBack && (
             <button
               onClick={onBack}

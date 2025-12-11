@@ -175,24 +175,70 @@ export default function WatermarkPreviewCanvas({
 
   // Generate preview image
   const generatePreview = useCallback(async () => {
-    if (!canvasRef.current || !image) return;
+    if (!image) return;
 
     try {
-      const dataUrl = await applyWatermarkLayers(
-        image.originalDataUrl,
-        layers,
-        logoLibrary,
-        { scale: 0.5, returnDataUrl: true } // 50% scale for preview performance
-      ) as string;
+      // First, show the original image immediately if we don't have a preview yet
+      if (!previewImageRef.current) {
+        const originalImg = new Image();
+        originalImg.onload = () => {
+          previewImageRef.current = originalImg;
+          if (canvasRef.current) {
+            drawCanvas();
+          }
+        };
+        originalImg.onerror = () => {
+          console.error('Failed to load original image');
+        };
+        originalImg.src = image.originalDataUrl;
+      }
 
-      const img = new Image();
-      img.onload = () => {
-        previewImageRef.current = img;
-        drawCanvas();
-      };
-      img.src = dataUrl;
+      let dataUrl: string;
+      
+      // If no layers, just use the original image
+      if (layers.length === 0 || layers.every(l => !l.enabled)) {
+        dataUrl = image.originalDataUrl;
+      } else {
+        // Apply watermarks
+        dataUrl = await applyWatermarkLayers(
+          image.originalDataUrl,
+          layers.filter(l => l.enabled),
+          logoLibrary,
+          { scale: 0.5, returnDataUrl: true } // 50% scale for preview performance
+        ) as string;
+      }
+
+      // Only update if we have layers or if the dataUrl is different
+      if (layers.length > 0 && !layers.every(l => !l.enabled)) {
+        const img = new Image();
+        img.onload = () => {
+          previewImageRef.current = img;
+          if (canvasRef.current) {
+            drawCanvas();
+          }
+        };
+        img.onerror = (error) => {
+          console.error('Error loading preview image:', error);
+          // Keep the original image if watermarking fails
+        };
+        img.src = dataUrl;
+      }
     } catch (error) {
       console.error('Error generating preview:', error);
+      // Fallback to original image on error
+      if (!previewImageRef.current) {
+        const fallbackImg = new Image();
+        fallbackImg.onload = () => {
+          previewImageRef.current = fallbackImg;
+          if (canvasRef.current) {
+            drawCanvas();
+          }
+        };
+        fallbackImg.onerror = () => {
+          console.error('Failed to load fallback image');
+        };
+        fallbackImg.src = image.originalDataUrl;
+      }
     }
   }, [image, layers, logoLibrary, drawCanvas]);
 
@@ -248,15 +294,17 @@ export default function WatermarkPreviewCanvas({
 
   // Generate preview when layers or image change
   useEffect(() => {
-    generatePreview();
-  }, [generatePreview]);
+    if (image) {
+      generatePreview();
+    }
+  }, [image, layers, generatePreview]);
 
   // Redraw when zoom/pan or selection changes
   useEffect(() => {
-    if (previewImageRef.current) {
+    if (previewImageRef.current && canvasRef.current) {
       drawCanvas();
     }
-  }, [drawCanvas]);
+  }, [zoom, pan, selectedLayerId, drawCanvas]);
 
   return (
     <div className="flex flex-col h-full">
@@ -297,30 +345,34 @@ export default function WatermarkPreviewCanvas({
       {/* Canvas Container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto bg-gray-800 flex items-center justify-center p-4 relative"
+        className="flex-1 overflow-auto bg-gray-800 flex items-center justify-center p-4 relative min-h-0 custom-scrollbar"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        {layers.length === 0 ? (
-          <div className="text-center max-w-md">
-            <div className="text-6xl mb-4">🎨</div>
-            <h3 className="text-lg font-semibold text-gray-200 mb-2">No watermarks yet</h3>
-            <p className="text-sm text-gray-400 mb-4">
-              Add text or logo layers using the controls on the right
-            </p>
-            <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-              <span>💡 Tip:</span>
-              <span>Click &quot;Add Text&quot; or &quot;Add Logo&quot; in the right panel to get started</span>
-            </div>
-          </div>
-        ) : (
+        {image && previewImageRef.current ? (
           <canvas
             ref={canvasRef}
             className="cursor-move"
             style={{ maxWidth: '100%', maxHeight: '100%' }}
           />
+        ) : image ? (
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-200 mb-2">Loading preview...</h3>
+            <p className="text-sm text-gray-400">
+              Generating image preview
+            </p>
+          </div>
+        ) : (
+          <div className="text-center max-w-md">
+            <div className="text-6xl mb-4">🎨</div>
+            <h3 className="text-lg font-semibold text-gray-200 mb-2">No image selected</h3>
+            <p className="text-sm text-gray-400">
+              Select an image from the left panel to start editing
+            </p>
+          </div>
         )}
       </div>
     </div>

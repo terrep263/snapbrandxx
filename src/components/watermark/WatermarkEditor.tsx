@@ -51,9 +51,9 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
   const currentLayers = selectedImageId ? getLayersForImage(selectedImageId) : [];
 
   return (
-    <div className="flex flex-1 overflow-hidden bg-gray-800">
+    <div className="flex h-full w-full overflow-hidden bg-gray-800">
       {/* Left: Image Thumbnails */}
-      <div className="w-64 border-r border-gray-700 bg-gray-900 overflow-y-auto">
+      <div className="w-64 border-r border-gray-700 bg-gray-900 overflow-y-auto flex-shrink-0 custom-scrollbar">
         <ImageThumbnailList
           images={images}
           selectedImageId={selectedImageId}
@@ -62,7 +62,7 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
       </div>
 
       {/* Center: Preview Canvas */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900">
+      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900 min-w-0 min-h-0">
         {selectedImage ? (
           <WatermarkPreviewCanvas
             image={selectedImage}
@@ -78,7 +78,7 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
       </div>
 
       {/* Right: Control Panel */}
-      <div className="w-96 border-l border-gray-700 bg-gray-900 overflow-y-auto">
+      <div className="w-96 border-l border-gray-700 bg-gray-900 overflow-hidden flex-shrink-0 flex flex-col min-h-0">
         <WatermarkControlPanel
           selectedImage={selectedImage}
           layers={currentLayers}
