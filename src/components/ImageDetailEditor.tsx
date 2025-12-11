@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { WatermarkLayer, ProcessedImage, Anchor, TileMode, applyWatermarkLayers } from '@/lib/watermarkEngine';
+import { WatermarkLayer, ProcessedImage, Anchor, TileMode } from '@/lib/watermark/types';
+import { applyWatermarkLayers } from '@/lib/watermark/engine';
 import { FontRecord } from '@/lib/fontLibrary';
 import LayerListPanel from './LayerListPanel';
 import LayerEditorPanel from './LayerEditorPanel';
@@ -71,6 +72,8 @@ export default function ImageDetailEditor({
       fontFamily: 'Inter',
       fontSize: 24,
       color: '#ffffff',
+      zIndex: 0,
+      enabled: true,
     };
     setLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);
@@ -94,6 +97,8 @@ export default function ImageDetailEditor({
       tileMode: TileMode.NONE,
       effect: '',
       logoImage: logoToUse,
+      zIndex: 0,
+      enabled: true,
     };
     setLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);
@@ -204,4 +209,3 @@ export default function ImageDetailEditor({
     </div>
   );
 }
-
