@@ -25,11 +25,12 @@ export default function LoginPage() {
     // Small delay to prevent brute force
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    if (authenticate(password)) {
+    const trimmedPassword = password.trim();
+    if (authenticate(trimmedPassword)) {
       router.push('/');
       router.refresh();
     } else {
-      setError('Invalid password. Access denied.');
+      setError('Invalid password. Access denied. Please check your password and try again.');
       setPassword('');
       setIsLoading(false);
     }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { WatermarkLayer, ProcessedImage, Anchor, TileMode, applyWatermarkLayers } from '@/lib/watermarkEngine';
+import { FontRecord } from '@/lib/fontLibrary';
 import LayerListPanel from './LayerListPanel';
 import LayerEditorPanel from './LayerEditorPanel';
 import DraggablePreviewCanvas from './DraggablePreviewCanvas';
@@ -14,6 +15,8 @@ interface ImageDetailEditorProps {
   onClose: () => void;
   logoImage: HTMLImageElement | null;
   onLogoFileChange: (file: File | null) => void;
+  brandFonts?: FontRecord[];
+  onOpenFontLibrary?: () => void;
 }
 
 export default function ImageDetailEditor({
@@ -24,14 +27,21 @@ export default function ImageDetailEditor({
   onClose,
   logoImage,
   onLogoFileChange,
+  brandFonts = [],
+  onOpenFontLibrary,
 }: ImageDetailEditorProps) {
   const [layers, setLayers] = useState<WatermarkLayer[]>(
     imageLayers.length > 0 ? imageLayers : globalLayers
   );
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  // Update layers when props change
+  // Update layers when props change - use a ref to track if we're in the middle of editing
+  const isEditingRef = useRef(false);
+  
   useEffect(() => {
-    setLayers(imageLayers.length > 0 ? imageLayers : globalLayers);
+    // Only update from props if we're not actively editing
+    if (!isEditingRef.current) {
+      setLayers(imageLayers.length > 0 ? imageLayers : globalLayers);
+    }
   }, [imageLayers, globalLayers]);
 
   // Update logo images in layers when logoImage prop changes
@@ -66,9 +76,10 @@ export default function ImageDetailEditor({
     setSelectedLayerId(newLayer.id);
   };
 
-  const handleAddLogoLayer = () => {
-    if (!logoImage) {
-      alert('Please upload a logo first');
+  const handleAddLogoLayer = (logoImageParam?: HTMLImageElement) => {
+    const logoToUse = logoImageParam || logoImage;
+    if (!logoToUse) {
+      alert('Please upload a logo first or select one from the library');
       return;
     }
     const newLayer: WatermarkLayer = {
@@ -82,13 +93,14 @@ export default function ImageDetailEditor({
       opacity: 0.7,
       tileMode: TileMode.NONE,
       effect: '',
-      logoImage: logoImage,
+      logoImage: logoToUse,
     };
     setLayers((prev) => [...prev, newLayer]);
     setSelectedLayerId(newLayer.id);
   };
 
   const handleLayerUpdate = (updatedLayer: WatermarkLayer) => {
+    isEditingRef.current = true;
     setLayers((prev) =>
       prev.map((layer) => (layer.id === updatedLayer.id ? updatedLayer : layer))
     );
@@ -183,6 +195,8 @@ export default function ImageDetailEditor({
               layer={selectedLayer}
               onLayerUpdate={handleLayerUpdate}
               onDeleteLayer={handleLayerDelete}
+              brandFonts={brandFonts}
+              onOpenFontLibrary={onOpenFontLibrary}
             />
           </div>
         </div>

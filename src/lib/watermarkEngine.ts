@@ -170,11 +170,8 @@ function renderLayer(
     const fontSize = (layer.fontSize || 24) * scale;
     ctx.font = `${fontSize}px ${layer.fontFamily || 'Inter'}`;
     ctx.fillStyle = layer.color || '#ffffff';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = Math.max(1, fontSize * 0.05);
     
-    // Draw text with outline for visibility
-    ctx.strokeText(layer.text, 0, fontSize);
+    // Draw text
     ctx.fillText(layer.text, 0, fontSize);
   } else if (layer.type === 'logo' && layer.logoImage) {
     // Render logo layer

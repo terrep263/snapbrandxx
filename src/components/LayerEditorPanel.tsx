@@ -1,20 +1,45 @@
 'use client';
 
+import { useState, useEffect, useRef } from 'react';
 import { WatermarkLayer, Anchor } from '@/lib/watermarkEngine';
+import { FontRecord, getAllFonts, loadFont } from '@/lib/fontLibrary';
 
 interface LayerEditorPanelProps {
   layer: WatermarkLayer | null;
   onLayerUpdate: (layer: WatermarkLayer) => void;
   onDeleteLayer: (layerId: string) => void;
+  brandFonts?: FontRecord[];
+  onOpenFontLibrary?: () => void;
 }
 
-const FONT_OPTIONS = ['Inter', 'Roboto', 'Playfair Display', 'Arial', 'Helvetica', 'Times New Roman'];
+const BUILT_IN_FONTS = ['Inter', 'Roboto', 'Playfair Display', 'Arial', 'Helvetica', 'Times New Roman'];
 
 export default function LayerEditorPanel({
   layer,
   onLayerUpdate,
   onDeleteLayer,
+  brandFonts = [],
+  onOpenFontLibrary,
 }: LayerEditorPanelProps) {
+  const [textValue, setTextValue] = useState('');
+  const textInputRef = useRef<HTMLInputElement>(null);
+  const layerIdRef = useRef<string | null>(null);
+
+  // Update local text value when layer changes
+  useEffect(() => {
+    if (layer && layer.id !== layerIdRef.current) {
+      layerIdRef.current = layer.id;
+      setTextValue(layer.text ?? '');
+      // Focus the input when a new text layer is selected
+      if (layer.type === 'text' && textInputRef.current) {
+        setTimeout(() => textInputRef.current?.focus(), 100);
+      }
+    } else if (layer && layer.text !== textValue) {
+      // Sync if layer text changed externally
+      setTextValue(layer.text ?? '');
+    }
+  }, [layer]);
+
   if (!layer) {
     return (
       <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
@@ -76,6 +101,13 @@ export default function LayerEditorPanel({
               </button>
             ))}
           </div>
+          <button
+            onClick={() => updateLayer({ offsetX: 0, offsetY: 0 })}
+            className="mt-2 w-full px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition-colors"
+            title="Reset position to anchor point"
+          >
+            Reset Position
+          </button>
         </div>
 
         {/* Scale (Size) */}
@@ -118,10 +150,10 @@ export default function LayerEditorPanel({
           </div>
         </div>
 
-        {/* Opacity (Transparency) */}
+        {/* Opacity */}
         <div>
           <label className="block text-xs text-gray-400 mb-1">
-            Transparency: {Math.round((1 - layer.opacity) * 100)}%
+            Opacity: {Math.round(layer.opacity * 100)}%
           </label>
           <input
             type="range"
@@ -144,25 +176,66 @@ export default function LayerEditorPanel({
             <div>
               <label className="block text-xs text-gray-400 mb-1">Text</label>
               <input
+                ref={textInputRef}
                 type="text"
-                value={layer.text || ''}
-                onChange={(e) => updateLayer({ text: e.target.value })}
+                value={textValue}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setTextValue(newValue);
+                  updateLayer({ text: newValue });
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                }}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-100 focus:outline-none focus:border-primary"
                 placeholder="Enter text"
+                autoComplete="off"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Font Family</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs text-gray-400">Font Family</label>
+                {onOpenFontLibrary && (
+                  <button
+                    onClick={onOpenFontLibrary}
+                    className="text-xs text-primary hover:text-primary-dark"
+                  >
+                    Manage Fonts
+                  </button>
+                )}
+              </div>
               <select
                 value={layer.fontFamily || 'Inter'}
-                onChange={(e) => updateLayer({ fontFamily: e.target.value })}
+                onChange={async (e) => {
+                  const selectedFont = e.target.value;
+                  updateLayer({ fontFamily: selectedFont });
+                  
+                  // Lazy load brand font if selected
+                  if (brandFonts.length > 0) {
+                    const brandFont = brandFonts.find(f => f.family_name === selectedFont);
+                    if (brandFont) {
+                      await loadFont(brandFont);
+                    }
+                  }
+                }}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm text-gray-100 focus:outline-none focus:border-primary"
               >
-                {FONT_OPTIONS.map((font) => (
-                  <option key={font} value={font}>
-                    {font}
-                  </option>
-                ))}
+                <optgroup label="Built-in Fonts">
+                  {BUILT_IN_FONTS.map((font) => (
+                    <option key={font} value={font}>
+                      {font}
+                    </option>
+                  ))}
+                </optgroup>
+                {brandFonts.length > 0 && (
+                  <optgroup label="Brand Fonts">
+                    {brandFonts.map((font) => (
+                      <option key={font.id} value={font.family_name}>
+                        {font.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
             <div>
@@ -172,14 +245,14 @@ export default function LayerEditorPanel({
               <input
                 type="range"
                 min="12"
-                max="72"
+                max="142"
                 value={layer.fontSize || 24}
                 onChange={(e) => updateLayer({ fontSize: parseInt(e.target.value) })}
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
                 <span>12px</span>
-                <span>72px</span>
+                <span>142px</span>
               </div>
             </div>
             <div>

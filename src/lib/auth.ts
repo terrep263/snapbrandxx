@@ -3,7 +3,16 @@
  * Simple password-based authentication for internal tool
  */
 
-const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'snapbrandxx2024';
+// Get password from env or use hardcoded fallback
+function getAdminPassword(): string {
+  if (typeof window !== 'undefined') {
+    // Client-side: use env var or fallback
+    return (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'snapbrandxx19083020').trim();
+  }
+  // Server-side: use env var or fallback
+  return (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'snapbrandxx19083020').trim();
+}
+
 const AUTH_STORAGE_KEY = 'snapbrandxx-auth';
 
 export interface AuthState {
@@ -41,7 +50,13 @@ export function isAuthenticated(): boolean {
  * Authenticate with password
  */
 export function authenticate(password: string): boolean {
-  if (password === ADMIN_PASSWORD) {
+  if (!password) return false;
+  
+  const trimmedPassword = password.trim();
+  const adminPassword = getAdminPassword();
+  
+  // Simple, direct comparison
+  if (trimmedPassword === adminPassword) {
     const auth: AuthState = {
       isAuthenticated: true,
       timestamp: Date.now(),
@@ -49,6 +64,7 @@ export function authenticate(password: string): boolean {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(auth));
     return true;
   }
+  
   return false;
 }
 
