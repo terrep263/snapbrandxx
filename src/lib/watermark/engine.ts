@@ -15,6 +15,16 @@ import {
 import { LogoItem, logoItemToImage } from '../logoLibrary';
 
 /**
+ * Export options for watermarked images
+ */
+export interface ExportOptions {
+  format?: 'jpeg' | 'png' | 'webp';
+  quality?: number; // 0.0 to 1.0
+  scale?: number; // For preview vs full-res (0.1 to 1.0)
+  returnDataUrl?: boolean;
+}
+
+/**
  * Load an image from a File or data URL
  */
 export async function loadImage(source: File | string | HTMLImageElement): Promise<HTMLImageElement> {
@@ -40,6 +50,53 @@ export async function loadImage(source: File | string | HTMLImageElement): Promi
       reader.readAsDataURL(source);
     }
   });
+}
+
+/**
+ * Ensure font is loaded before rendering
+ */
+async function ensureFontLoaded(
+  fontFamily: string,
+  weight: string | number = 'normal',
+  style: string = 'normal'
+): Promise<boolean> {
+  // Check if browser supports Font Loading API
+  if (!document.fonts) {
+    return true; // Assume loaded if API not available
+  }
+
+  const fontString = `${style} ${weight} 16px "${fontFamily}"`;
+  
+  try {
+    await document.fonts.load(fontString);
+    return document.fonts.check(fontString);
+  } catch (error) {
+    console.warn(`Failed to load font: ${fontFamily}`, error);
+    return false;
+  }
+}
+
+/**
+ * Preload all fonts used in layers
+ */
+export async function preloadAllFonts(layers: WatermarkLayer[]): Promise<void> {
+  const fonts = new Set<string>();
+  
+  layers.forEach(layer => {
+    if (layer.type === 'text' && layer.fontFamily) {
+      const fontString = `${layer.fontStyle || 'normal'} ${layer.fontWeight || 'normal'} 16px "${layer.fontFamily}"`;
+      fonts.add(fontString);
+    }
+  });
+
+  const loadPromises = Array.from(fonts).map(font => 
+    document.fonts?.load(font).catch(err => {
+      console.warn(`Failed to load font: ${font}`, err);
+    })
+  );
+
+  await Promise.all(loadPromises);
+  console.log('All fonts preloaded successfully');
 }
 
 /**
@@ -89,9 +146,9 @@ function measureText(
 }
 
 /**
- * Render text with effects
+ * Render text with effects and high-quality rendering
  */
-function renderTextWithEffect(
+async function renderTextWithEffect(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
@@ -104,11 +161,24 @@ function renderTextWithEffect(
   secondaryColor: string | undefined,
   effect: TextEffect,
   textAlign: TextAlign
-): void {
+): Promise<void> {
+  // Ensure font is loaded
+  let actualFontFamily = fontFamily;
+  const fontLoaded = await ensureFontLoaded(fontFamily, fontWeight, fontStyle);
+  
+  if (!fontLoaded) {
+    console.warn(`Font ${fontFamily} not loaded, using fallback`);
+    actualFontFamily = 'Arial, sans-serif';
+  }
+
+  // Enable high-quality rendering
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
   // Set font
   const weight = fontWeight || 'normal';
   const style = fontStyle || 'normal';
-  ctx.font = `${style} ${weight} ${fontSize}px ${fontFamily}`;
+  ctx.font = `${style} ${weight} ${fontSize}px ${actualFontFamily}`;
   ctx.textAlign = textAlign as CanvasTextAlign;
   ctx.textBaseline = 'alphabetic';
 
@@ -127,22 +197,26 @@ function renderTextWithEffect(
       break;
 
     case TextEffect.OUTLINE:
-      // Draw outline (stroke) then fill
+      // Improved outline rendering with smoother edges
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
       ctx.strokeStyle = secondaryColor || '#000000';
-      ctx.lineWidth = Math.max(1, fontSize * 0.08);
+      ctx.lineWidth = Math.max(2, fontSize * 0.1); // Increased from 0.08
       ctx.strokeText(text, textX, y);
       ctx.fillStyle = color;
       ctx.fillText(text, textX, y);
       break;
 
     case TextEffect.SHADOW:
-      // Draw shadow offset, then text
-      ctx.shadowColor = secondaryColor || '#000000';
-      ctx.shadowBlur = fontSize * 0.15;
-      ctx.shadowOffsetX = fontSize * 0.03;
-      ctx.shadowOffsetY = fontSize * 0.03;
+      // Improved shadow with better visibility
+      ctx.shadowColor = secondaryColor || 'rgba(0, 0, 0, 0.8)';
+      ctx.shadowBlur = fontSize * 0.2; // Increased from 0.15
+      ctx.shadowOffsetX = fontSize * 0.05; // Increased from 0.03
+      ctx.shadowOffsetY = fontSize * 0.05;
       ctx.fillStyle = color;
       ctx.fillText(text, textX, y);
+      // Reset shadow
+      ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
@@ -172,13 +246,13 @@ function renderTextWithEffect(
 /**
  * Render a single text layer
  */
-function renderTextLayer(
+async function renderTextLayer(
   ctx: CanvasRenderingContext2D,
   layer: WatermarkLayer,
   canvasWidth: number,
   canvasHeight: number,
   scale: number = 1.0
-): void {
+): Promise<void> {
   if (!layer.text) return;
 
   const anchorPoint = getAnchorPoint(layer.anchor, canvasWidth, canvasHeight);
@@ -207,7 +281,7 @@ function renderTextLayer(
   const effect = (layer.effect as TextEffect) || TextEffect.SOLID;
   const textAlign = layer.textAlign || TextAlign.LEFT;
 
-  renderTextWithEffect(
+  await renderTextWithEffect(
     ctx,
     layer.text,
     0,
@@ -289,6 +363,10 @@ async function renderLogoLayer(
     }
   }
 
+  // Enable high-quality logo rendering
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
   // Draw logo
   ctx.globalAlpha = layer.opacity;
   const effect = (layer.effect as LogoEffect) || LogoEffect.SOLID;
@@ -320,15 +398,15 @@ async function renderLogoLayer(
 /**
  * Render tiled text
  */
-function renderTiledText(
+async function renderTiledText(
   ctx: CanvasRenderingContext2D,
   layer: WatermarkLayer,
   canvasWidth: number,
   canvasHeight: number,
   scale: number = 1.0
-): void {
+): Promise<void> {
   if (!layer.text || layer.tileMode === TileMode.NONE) {
-    renderTextLayer(ctx, layer, canvasWidth, canvasHeight, scale);
+    await renderTextLayer(ctx, layer, canvasWidth, canvasHeight, scale);
     return;
   }
 
@@ -369,7 +447,7 @@ function renderTiledText(
         const effect = (layer.effect as TextEffect) || TextEffect.SOLID;
         const textAlign = layer.textAlign || TextAlign.LEFT;
 
-        renderTextWithEffect(
+        await renderTextWithEffect(
           ctx,
           layer.text,
           0,
@@ -412,7 +490,7 @@ function renderTiledText(
       const effect = (layer.effect as TextEffect) || TextEffect.SOLID;
       const textAlign = layer.textAlign || TextAlign.LEFT;
 
-      renderTextWithEffect(
+      await renderTextWithEffect(
         ctx,
         layer.text,
         0,
@@ -447,9 +525,9 @@ async function renderLayer(
 
   if (layer.type === 'text') {
     if (layer.tileMode === TileMode.NONE) {
-      renderTextLayer(ctx, layer, canvasWidth, canvasHeight, scale);
+      await renderTextLayer(ctx, layer, canvasWidth, canvasHeight, scale);
     } else {
-      renderTiledText(ctx, layer, canvasWidth, canvasHeight, scale);
+      await renderTiledText(ctx, layer, canvasWidth, canvasHeight, scale);
     }
   } else if (layer.type === 'logo') {
     await renderLogoLayer(ctx, layer, canvasWidth, canvasHeight, logoImage, scale);
@@ -457,22 +535,28 @@ async function renderLayer(
 }
 
 /**
- * Apply watermarks to an image
+ * Apply watermarks to an image with configurable export options
  * 
  * @param sourceImage - The source image (File, data URL, or HTMLImageElement)
  * @param layers - Array of WatermarkLayer objects (sorted by zIndex)
  * @param logoLibrary - Map of logoId to LogoItem for resolving logo images
- * @param returnDataUrl - If true, returns data URL; otherwise returns Blob
- * @param scale - Optional scale factor for preview (1.0 = full resolution)
+ * @param options - Export options (format, quality, scale, returnDataUrl)
  * @returns Promise resolving to Blob (for export) or data URL (for preview)
  */
 export async function applyWatermarkLayers(
   sourceImage: File | string | HTMLImageElement,
   layers: WatermarkLayer[],
   logoLibrary: Map<string, LogoItem> = new Map(),
-  returnDataUrl: boolean = false,
-  scale: number = 1.0
+  options: ExportOptions = {}
 ): Promise<Blob | string> {
+  // Default options
+  const {
+    format = 'jpeg',
+    quality = 0.95,
+    scale = 1.0,
+    returnDataUrl = false
+  } = options;
+
   // Load source image
   const img = await loadImage(sourceImage);
 
@@ -487,6 +571,10 @@ export async function applyWatermarkLayers(
   const height = Math.floor(img.height * scale);
   canvas.width = width;
   canvas.height = height;
+
+  // Enable high-quality canvas rendering
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   // Draw base image
   ctx.drawImage(img, 0, 0, width, height);
@@ -508,9 +596,14 @@ export async function applyWatermarkLayers(
     await renderLayer(ctx, layer, width, height, logoImage, scale);
   }
 
+  // Determine MIME type based on format
+  const mimeType = format === 'jpeg' ? 'image/jpeg'
+                 : format === 'png' ? 'image/png'
+                 : 'image/webp';
+
   // Return result
   if (returnDataUrl) {
-    return canvas.toDataURL('image/jpeg', 0.92);
+    return canvas.toDataURL(mimeType, quality);
   } else {
     return new Promise((resolve) => {
       canvas.toBlob(
@@ -521,10 +614,9 @@ export async function applyWatermarkLayers(
             throw new Error('Failed to create blob');
           }
         },
-        'image/jpeg',
-        0.92
+        mimeType,
+        quality
       );
     });
   }
 }
-
