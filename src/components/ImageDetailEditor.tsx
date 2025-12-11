@@ -50,7 +50,7 @@ export default function ImageDetailEditor({
     if (logoImage) {
       setLayers((prevLayers) =>
         prevLayers.map((layer) =>
-          layer.type === 'logo' ? { ...layer, logoImage } : layer
+          layer.type === 'logo' && layer.logoId ? { ...layer } : layer
         )
       );
     }
@@ -67,10 +67,10 @@ export default function ImageDetailEditor({
       rotation: 0,
       opacity: 0.7,
       tileMode: TileMode.NONE,
-      effect: '',
+      effect: 'solid',
       text: 'Your Brand',
       fontFamily: 'Inter',
-      fontSize: 24,
+      fontSizeRelative: 3.0,
       color: '#ffffff',
       zIndex: 0,
       enabled: true,
@@ -95,8 +95,10 @@ export default function ImageDetailEditor({
       rotation: 0,
       opacity: 0.7,
       tileMode: TileMode.NONE,
-      effect: '',
-      logoImage: logoToUse,
+      effect: 'solid',
+      logoId: 'temp',
+      naturalLogoWidth: logoToUse.width,
+      naturalLogoHeight: logoToUse.height,
       zIndex: 0,
       enabled: true,
     };
