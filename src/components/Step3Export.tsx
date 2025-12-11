@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import JSZip from 'jszip';
 import { ProcessedImage, WatermarkLayer } from '@/lib/watermark/types';
 import { applyWatermarkLayers } from '@/lib/watermark/engine';
@@ -180,7 +181,7 @@ export default function Step3Export({
           <div className="bg-gray-900 border border-gray-700 rounded-lg p-6">
             <button
               onClick={handleGenerateWatermarked}
-              disabled={isProcessing || images.length === 0 || globalLayers.length === 0}
+              disabled={isProcessing || images.length === 0 || !job || job.globalLayers.length === 0}
               className="w-full px-6 py-4 bg-primary hover:bg-primary-dark disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
             >
               {isProcessing
@@ -225,11 +226,15 @@ export default function Step3Export({
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {image.processedDataUrl && (
-                        <img
-                          src={image.processedDataUrl}
-                          alt={image.originalFile.name}
-                          className="w-16 h-16 object-cover rounded"
-                        />
+                        <div className="relative w-16 h-16 rounded overflow-hidden">
+                          <Image
+                            src={image.processedDataUrl}
+                            alt={image.originalFile.name}
+                            fill
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-300 truncate">{image.originalFile.name}</p>

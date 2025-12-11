@@ -46,7 +46,7 @@ export default function Step1OrderImages({
         clearTimeout(autoAdvanceTimeout);
       }
     };
-  }, [images.length]);
+  }, [images.length, showAdvanceMessage, onContinue, autoAdvanceTimeout]);
 
   const handleManualContinue = () => {
     if (autoAdvanceTimeout) {

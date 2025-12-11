@@ -71,7 +71,7 @@ export default function WatermarkSettingsPanel({
             {logoImage && (
               <>
                 <div className="text-xs text-gray-500 mb-2">
-                  Logo loaded. Add a logo layer using the "+L" button in the Layers panel.
+                  Logo loaded. Add a logo layer using the &quot;+L&quot; button in the Layers panel.
                 </div>
                 <button
                   onClick={() => {

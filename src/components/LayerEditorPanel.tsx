@@ -38,7 +38,7 @@ export default function LayerEditorPanel({
       // Sync if layer text changed externally
       setTextValue(layer.text ?? '');
     }
-  }, [layer]);
+  }, [layer, textValue]);
 
   if (!layer) {
     return (

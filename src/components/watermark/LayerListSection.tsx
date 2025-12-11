@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
 import { WatermarkLayer } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
 
@@ -77,7 +78,7 @@ export default function LayerListSection({
             <div className="text-4xl mb-2">📝</div>
             <p className="text-sm font-medium text-gray-300 mb-1">No watermarks yet</p>
             <p className="text-xs text-gray-500">
-              Click "Add Text" or "Add Logo" above to get started
+              Click &quot;Add Text&quot; or &quot;Add Logo&quot; above to get started
             </p>
           </div>
         ) : (
@@ -130,7 +131,7 @@ export default function LayerListSection({
                         
                         {layer.type === 'text' && layer.text && (
                           <p className="text-sm text-gray-300 font-medium truncate">
-                            "{layer.text}"
+                            &quot;{layer.text}&quot;
                           </p>
                         )}
                         {layer.type === 'logo' && layer.logoId && (
@@ -242,7 +243,9 @@ function LogoPickerModal({ onSelect, onClose }: { onSelect: (logoId: string) => 
                   onClick={() => onSelect(logo.id)}
                   className="cursor-pointer rounded-lg border-2 border-gray-700 hover:border-primary overflow-hidden bg-gray-900 transition-all hover:scale-105"
                 >
-                  <img src={logo.imageData} alt={logo.name} className="w-full h-32 object-contain p-2" />
+                  <div className="relative w-full h-32">
+                    <Image src={logo.imageData} alt={logo.name} fill className="object-contain p-2" unoptimized />
+                  </div>
                   <p className="p-2 text-xs text-gray-300 truncate text-center border-t border-gray-700">{logo.name}</p>
                 </div>
               ))}

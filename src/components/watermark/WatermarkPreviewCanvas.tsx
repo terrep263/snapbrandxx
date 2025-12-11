@@ -38,29 +38,71 @@ export default function WatermarkPreviewCanvas({
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, scale: 1 });
 
-  // Generate preview image
-  const generatePreview = useCallback(async () => {
-    if (!canvasRef.current || !image) return;
-
-    try {
-      const dataUrl = await applyWatermarkLayers(
-        image.originalDataUrl,
-        layers,
-        logoLibrary,
-        true, // returnDataUrl
-        0.5 // 50% scale for preview performance
-      ) as string;
-
-      const img = new Image();
-      img.onload = () => {
-        previewImageRef.current = img;
-        drawCanvas();
-      };
-      img.src = dataUrl;
-    } catch (error) {
-      console.error('Error generating preview:', error);
+  const getAnchorPoint = (anchor: Anchor, width: number, height: number) => {
+    switch (anchor) {
+      case Anchor.TOP_LEFT: return { x: 0, y: 0 };
+      case Anchor.TOP_RIGHT: return { x: width, y: 0 };
+      case Anchor.BOTTOM_LEFT: return { x: 0, y: height };
+      case Anchor.BOTTOM_RIGHT: return { x: width, y: height };
+      case Anchor.CENTER: return { x: width / 2, y: height / 2 };
     }
-  }, [image, layers, logoLibrary]);
+  };
+
+  // Draw selection box around layer
+  const drawSelectionBox = useCallback((
+    ctx: CanvasRenderingContext2D,
+    layer: WatermarkLayer,
+    imageWidth: number,
+    imageHeight: number,
+    scale: number
+  ) => {
+    const anchorPoint = getAnchorPoint(layer.anchor, imageWidth, imageHeight);
+    const offsetX = (layer.offsetX / 100) * imageWidth;
+    const offsetY = (layer.offsetY / 100) * imageHeight;
+    const baseX = anchorPoint.x + offsetX;
+    const baseY = anchorPoint.y + offsetY;
+
+    // Calculate layer bounds
+    let layerWidth = 0;
+    let layerHeight = 0;
+    let contentOffsetX = 0;
+    let contentOffsetY = 0;
+
+    if (layer.type === 'text' && layer.text) {
+      // Measure text (simplified - would need actual measurement)
+      const fontSizeRelative = layer.fontSizeRelative || 5;
+      const fontSize = (imageHeight * fontSizeRelative / 100) * layer.scale;
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      if (tempCtx) {
+        tempCtx.font = `${fontSize}px ${layer.fontFamily || 'Inter'}`;
+        const metrics = tempCtx.measureText(layer.text);
+        layerWidth = metrics.width;
+        layerHeight = fontSize * 1.2;
+        contentOffsetX = 0;
+        contentOffsetY = -fontSize * 0.2;
+      }
+    } else if (layer.type === 'logo') {
+      // Logo dimensions (would need actual logo image)
+      layerWidth = 100 * layer.scale; // Placeholder
+      layerHeight = 100 * layer.scale; // Placeholder
+      contentOffsetX = -layerWidth / 2;
+      contentOffsetY = -layerHeight / 2;
+    }
+
+    if (layerWidth > 0 && layerHeight > 0) {
+      const canvasX = (baseX + contentOffsetX) * scale;
+      const canvasY = (baseY + contentOffsetY) * scale;
+      const canvasWidth = layerWidth * scale;
+      const canvasHeight = layerHeight * scale;
+
+      // Draw white outline box
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2 / scale;
+      ctx.setLineDash([]);
+      ctx.strokeRect(canvasX - 2, canvasY - 2, canvasWidth + 4, canvasHeight + 4);
+    }
+  }, []);
 
   // Draw canvas with zoom and pan
   const drawCanvas = useCallback(() => {
@@ -129,73 +171,31 @@ export default function WatermarkPreviewCanvas({
     }
 
     ctx.restore();
-  }, [zoom, pan, selectedLayerId, layers, image]);
+  }, [zoom, pan, selectedLayerId, layers, image, drawSelectionBox]);
 
-  // Draw selection box around layer
-  const drawSelectionBox = (
-    ctx: CanvasRenderingContext2D,
-    layer: WatermarkLayer,
-    imageWidth: number,
-    imageHeight: number,
-    scale: number
-  ) => {
-    const anchorPoint = getAnchorPoint(layer.anchor, imageWidth, imageHeight);
-    const offsetX = (layer.offsetX / 100) * imageWidth;
-    const offsetY = (layer.offsetY / 100) * imageHeight;
-    const baseX = anchorPoint.x + offsetX;
-    const baseY = anchorPoint.y + offsetY;
+  // Generate preview image
+  const generatePreview = useCallback(async () => {
+    if (!canvasRef.current || !image) return;
 
-    // Calculate layer bounds
-    let layerWidth = 0;
-    let layerHeight = 0;
-    let contentOffsetX = 0;
-    let contentOffsetY = 0;
+    try {
+      const dataUrl = await applyWatermarkLayers(
+        image.originalDataUrl,
+        layers,
+        logoLibrary,
+        true, // returnDataUrl
+        0.5 // 50% scale for preview performance
+      ) as string;
 
-    if (layer.type === 'text' && layer.text) {
-      // Measure text (simplified - would need actual measurement)
-      const fontSizeRelative = layer.fontSizeRelative || 5;
-      const fontSize = (imageHeight * fontSizeRelative / 100) * layer.scale;
-      const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d');
-      if (tempCtx) {
-        tempCtx.font = `${fontSize}px ${layer.fontFamily || 'Inter'}`;
-        const metrics = tempCtx.measureText(layer.text);
-        layerWidth = metrics.width;
-        layerHeight = fontSize * 1.2;
-        contentOffsetX = 0;
-        contentOffsetY = -fontSize * 0.2;
-      }
-    } else if (layer.type === 'logo') {
-      // Logo dimensions (would need actual logo image)
-      layerWidth = 100 * layer.scale; // Placeholder
-      layerHeight = 100 * layer.scale; // Placeholder
-      contentOffsetX = -layerWidth / 2;
-      contentOffsetY = -layerHeight / 2;
+      const img = new Image();
+      img.onload = () => {
+        previewImageRef.current = img;
+        drawCanvas();
+      };
+      img.src = dataUrl;
+    } catch (error) {
+      console.error('Error generating preview:', error);
     }
-
-    if (layerWidth > 0 && layerHeight > 0) {
-      const canvasX = (baseX + contentOffsetX) * scale;
-      const canvasY = (baseY + contentOffsetY) * scale;
-      const canvasWidth = layerWidth * scale;
-      const canvasHeight = layerHeight * scale;
-
-      // Draw white outline box
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2 / scale;
-      ctx.setLineDash([]);
-      ctx.strokeRect(canvasX - 2, canvasY - 2, canvasWidth + 4, canvasHeight + 4);
-    }
-  };
-
-  const getAnchorPoint = (anchor: Anchor, width: number, height: number) => {
-    switch (anchor) {
-      case Anchor.TOP_LEFT: return { x: 0, y: 0 };
-      case Anchor.TOP_RIGHT: return { x: width, y: 0 };
-      case Anchor.BOTTOM_LEFT: return { x: 0, y: height };
-      case Anchor.BOTTOM_RIGHT: return { x: width, y: height };
-      case Anchor.CENTER: return { x: width / 2, y: height / 2 };
-    }
-  };
+  }, [image, layers, logoLibrary, drawCanvas]);
 
   // Handle mouse events for dragging layers
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -250,7 +250,7 @@ export default function WatermarkPreviewCanvas({
   // Generate preview when layers or image change
   useEffect(() => {
     generatePreview();
-  }, [image, layers, logoLibrary]);
+  }, [generatePreview]);
 
   // Redraw when zoom/pan or selection changes
   useEffect(() => {
@@ -313,7 +313,7 @@ export default function WatermarkPreviewCanvas({
             </p>
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
               <span>💡 Tip:</span>
-              <span>Click "Add Text" or "Add Logo" in the right panel to get started</span>
+              <span>Click &quot;Add Text&quot; or &quot;Add Logo&quot; in the right panel to get started</span>
             </div>
           </div>
         ) : (

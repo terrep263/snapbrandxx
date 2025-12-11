@@ -6,6 +6,7 @@
 
 'use client';
 
+import Image from 'next/image';
 import { ProcessedImage } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
 
@@ -44,11 +45,15 @@ export default function ImageThumbnailList({
               }`}
               onClick={() => onImageSelect(image.id)}
             >
-              <img
-                src={image.originalDataUrl}
-                alt={image.originalFile.name}
-                className="w-full h-32 object-cover"
-              />
+              <div className="relative w-full h-32">
+                <Image
+                  src={image.originalDataUrl}
+                  alt={image.originalFile.name}
+                  fill
+                  className="object-cover"
+                  unoptimized
+                />
+              </div>
               {isOverridden && (
                 <div className="absolute top-2 right-2 bg-primary text-white text-xs px-2 py-1 rounded">
                   Custom

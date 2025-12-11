@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { WatermarkLayer, ProcessedImage, Anchor, TileMode } from '@/lib/watermarkEngine';
 import { FontRecord } from '@/lib/fontLibrary';
 import DraggablePreviewCanvas from './DraggablePreviewCanvas';
@@ -65,7 +66,7 @@ export default function Step2Editor({
     if (!selectedImageId && images.length > 0) {
       onSelectedImageChange(images[0]);
     }
-  }, [images.length]);
+  }, [images, selectedImageId, onSelectedImageChange]);
 
   const handleAddTextLayer = () => {
     const newLayer: WatermarkLayer = {
@@ -203,12 +204,14 @@ export default function Step2Editor({
                         : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                     }`}
                   >
-                    <div className="aspect-video bg-gray-900 rounded mb-2 overflow-hidden">
+                    <div className="aspect-video bg-gray-900 rounded mb-2 overflow-hidden relative">
                       {image.originalDataUrl && (
-                        <img
+                        <Image
                           src={image.originalDataUrl}
                           alt={image.originalFile.name}
-                          className="w-full h-full object-cover"
+                          fill
+                          className="object-cover"
+                          unoptimized
                         />
                       )}
                     </div>

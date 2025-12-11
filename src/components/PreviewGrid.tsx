@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { ProcessedImage, WatermarkLayer, applyWatermarkLayers } from '@/lib/watermarkEngine';
 
 interface PreviewGridProps {
@@ -167,11 +168,13 @@ export default function PreviewGrid({
             >
               <div className="relative aspect-square bg-gray-800">
                 {previewUrl ? (
-                  <img
+                  <Image
                     src={previewUrl}
                     alt={img.originalFile.name}
-                    className="w-full h-full object-contain"
+                    fill
+                    className="object-contain"
                     loading="lazy"
+                    unoptimized
                   />
                 ) : hasError ? (
                   <div className="w-full h-full flex items-center justify-center">

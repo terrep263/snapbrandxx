@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { LogoItem, saveLogo, getAllLogos, deleteLogo, updateLogoName, logoItemToImage } from '@/lib/logoLibrary';
 
 interface LogoGalleryProps {
@@ -163,11 +164,13 @@ export default function LogoGallery({ onSelectLogo, onClose }: LogoGalleryProps)
                   className="bg-gray-800 border border-gray-700 rounded-lg p-3 hover:border-primary transition-colors cursor-pointer"
                   onClick={() => handleSelect(logo)}
                 >
-                  <div className="aspect-square bg-gray-900 rounded mb-2 overflow-hidden flex items-center justify-center">
-                    <img
+                  <div className="aspect-square bg-gray-900 rounded mb-2 overflow-hidden flex items-center justify-center relative">
+                    <Image
                       src={logo.imageData}
                       alt={logo.name}
-                      className="max-w-full max-h-full object-contain"
+                      fill
+                      className="object-contain"
+                      unoptimized
                     />
                   </div>
                   {editingId === logo.id ? (

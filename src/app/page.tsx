@@ -106,7 +106,6 @@ export default function Home() {
         <FontLibrary
           onClose={() => {
             setShowFontLibrary(false);
-            getAllFonts().then(setBrandFonts).catch(console.error);
           }}
         />
       )}

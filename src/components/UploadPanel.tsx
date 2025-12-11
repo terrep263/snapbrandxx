@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import NextImage from 'next/image';
 import { ProcessedImage } from '@/lib/watermarkEngine';
 
 interface UploadPanelProps {
@@ -176,11 +177,15 @@ export default function UploadPanel({ images, onImagesChange }: UploadPanelProps
                 className="flex items-center gap-2 p-2 bg-gray-800 rounded hover:bg-gray-750"
               >
                 {img.originalDataUrl ? (
-                  <img
-                    src={img.originalDataUrl}
-                    alt={img.originalFile.name}
-                    className="w-12 h-12 object-cover rounded"
-                  />
+                  <div className="relative w-12 h-12 rounded overflow-hidden">
+                    <NextImage
+                      src={img.originalDataUrl}
+                      alt={img.originalFile.name}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
                 ) : (
                   <div className="w-12 h-12 bg-gray-700 rounded flex items-center justify-center">
                     <span className="text-xs text-gray-500">Error</span>

@@ -484,7 +484,7 @@ export function WatermarkProvider({ children }: { children: React.ReactNode }) {
   }, [state.job]);
 
   const createDefaultTextLayer = useCallback((text: string = 'Your Brand'): WatermarkLayer => {
-    const maxZIndex = state.job?.globalLayers.length > 0
+    const maxZIndex = state.job?.globalLayers && state.job.globalLayers.length > 0
       ? Math.max(...state.job.globalLayers.map(l => l.zIndex))
       : 0;
 
@@ -512,7 +512,7 @@ export function WatermarkProvider({ children }: { children: React.ReactNode }) {
   }, [state.job]);
 
   const createDefaultLogoLayer = useCallback((logoId: string): WatermarkLayer => {
-    const maxZIndex = state.job?.globalLayers.length > 0
+    const maxZIndex = state.job?.globalLayers && state.job.globalLayers.length > 0
       ? Math.max(...state.job.globalLayers.map(l => l.zIndex))
       : 0;
 
