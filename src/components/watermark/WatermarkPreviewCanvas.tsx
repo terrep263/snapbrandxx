@@ -26,7 +26,7 @@ export default function WatermarkPreviewCanvas({
   selectedLayerId,
   onLayerSelect,
 }: WatermarkPreviewCanvasProps) {
-  const { logoLibrary, updateLayer, getLayersForImage } = useWatermark();
+  const { logoLibrary, updateLayer, getLayersForImage, job, selectedImageId } = useWatermark();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewImageRef = useRef<HTMLImageElement | null>(null);
@@ -35,6 +35,9 @@ export default function WatermarkPreviewCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isDraggingLayer, setIsDraggingLayer] = useState(false);
+  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
+  const [layerDragStart, setLayerDragStart] = useState({ offsetX: 0, offsetY: 0, mouseX: 0, mouseY: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, scale: 1 });
 
@@ -48,13 +51,11 @@ export default function WatermarkPreviewCanvas({
     }
   };
 
-  // Draw selection box around layer
-  const drawSelectionBox = useCallback((
-    ctx: CanvasRenderingContext2D,
+  // Get layer bounds in image coordinates
+  const getLayerBounds = useCallback((
     layer: WatermarkLayer,
     imageWidth: number,
-    imageHeight: number,
-    scale: number
+    imageHeight: number
   ) => {
     const anchorPoint = getAnchorPoint(layer.anchor, imageWidth, imageHeight);
     const offsetX = (layer.offsetX / 100) * imageWidth;
@@ -69,7 +70,7 @@ export default function WatermarkPreviewCanvas({
     let contentOffsetY = 0;
 
     if (layer.type === 'text' && layer.text) {
-      // Measure text (simplified - would need actual measurement)
+      // Measure text
       const fontSizeRelative = layer.fontSizeRelative || 5;
       const fontSize = (imageHeight * fontSizeRelative / 100) * layer.scale;
       const tempCanvas = document.createElement('canvas');
@@ -83,18 +84,40 @@ export default function WatermarkPreviewCanvas({
         contentOffsetY = -fontSize * 0.2;
       }
     } else if (layer.type === 'logo') {
-      // Logo dimensions (would need actual logo image)
-      layerWidth = 100 * layer.scale; // Placeholder
-      layerHeight = 100 * layer.scale; // Placeholder
+      // Get actual logo dimensions
+      // Use stored natural dimensions if available, otherwise use defaults
+      const naturalWidth = layer.naturalLogoWidth || 100;
+      const naturalHeight = layer.naturalLogoHeight || 100;
+      
+      layerWidth = naturalWidth * layer.scale;
+      layerHeight = naturalHeight * layer.scale;
       contentOffsetX = -layerWidth / 2;
       contentOffsetY = -layerHeight / 2;
     }
 
-    if (layerWidth > 0 && layerHeight > 0) {
-      const canvasX = (baseX + contentOffsetX) * scale;
-      const canvasY = (baseY + contentOffsetY) * scale;
-      const canvasWidth = layerWidth * scale;
-      const canvasHeight = layerHeight * scale;
+    return {
+      x: baseX + contentOffsetX,
+      y: baseY + contentOffsetY,
+      width: layerWidth,
+      height: layerHeight,
+    };
+  }, []);
+
+  // Draw selection box around layer
+  const drawSelectionBox = useCallback((
+    ctx: CanvasRenderingContext2D,
+    layer: WatermarkLayer,
+    imageWidth: number,
+    imageHeight: number,
+    scale: number
+  ) => {
+    const bounds = getLayerBounds(layer, imageWidth, imageHeight);
+    
+    if (bounds.width > 0 && bounds.height > 0) {
+      const canvasX = bounds.x * scale;
+      const canvasY = bounds.y * scale;
+      const canvasWidth = bounds.width * scale;
+      const canvasHeight = bounds.height * scale;
 
       // Draw white outline box
       ctx.strokeStyle = '#ffffff';
@@ -102,7 +125,7 @@ export default function WatermarkPreviewCanvas({
       ctx.setLineDash([]);
       ctx.strokeRect(canvasX - 2, canvasY - 2, canvasWidth + 4, canvasHeight + 4);
     }
-  }, []);
+  }, [getLayerBounds]);
 
   // Draw canvas with zoom and pan
   const drawCanvas = useCallback(() => {
@@ -242,10 +265,100 @@ export default function WatermarkPreviewCanvas({
     }
   }, [image, layers, logoLibrary, drawCanvas]);
 
+  // Convert mouse coordinates to image coordinates
+  const mouseToImageCoords = useCallback((mouseX: number, mouseY: number) => {
+    if (!canvasRef.current || !containerRef.current || !previewImageRef.current) {
+      return { x: 0, y: 0 };
+    }
+
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    // Get mouse position relative to canvas
+    const canvasX = mouseX - canvasRect.left;
+    const canvasY = mouseY - canvasRect.top;
+    
+    // Account for pan
+    const adjustedX = canvasX - pan.x;
+    const adjustedY = canvasY - pan.y;
+    
+    // Calculate scale
+    const previewWidth = previewImageRef.current.width;
+    const previewHeight = previewImageRef.current.height;
+    let scale: number;
+    
+    if (zoom === 'fit') {
+      const aspectRatio = previewWidth / previewHeight;
+      const maxWidth = containerRect.width - 40;
+      const maxHeight = containerRect.height - 40;
+      const displayWidth = maxWidth / aspectRatio <= maxHeight ? maxWidth : maxHeight * aspectRatio;
+      scale = displayWidth / previewWidth;
+    } else {
+      scale = zoom / 100;
+    }
+    
+    // Convert to image coordinates
+    const imageX = adjustedX / scale;
+    const imageY = adjustedY / scale;
+    
+    return { x: imageX, y: imageY };
+  }, [zoom, pan]);
+
+  // Hit test: check if mouse click is on a layer
+  const hitTestLayer = useCallback((mouseX: number, mouseY: number): string | null => {
+    if (!previewImageRef.current) return null;
+    
+    const imageCoords = mouseToImageCoords(mouseX, mouseY);
+    const imageWidth = image.width;
+    const imageHeight = image.height;
+    
+    // Check layers in reverse order (top to bottom)
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const layer = layers[i];
+      if (!layer.enabled) continue;
+      
+      const bounds = getLayerBounds(layer, imageWidth, imageHeight);
+      
+      if (
+        imageCoords.x >= bounds.x &&
+        imageCoords.x <= bounds.x + bounds.width &&
+        imageCoords.y >= bounds.y &&
+        imageCoords.y <= bounds.y + bounds.height
+      ) {
+        return layer.id;
+      }
+    }
+    
+    return null;
+  }, [layers, image, mouseToImageCoords, getLayerBounds]);
+
   // Handle mouse events for dragging layers
   const handleMouseDown = (e: React.MouseEvent) => {
-    // TODO: Implement layer hit testing and dragging
-    // For now, just handle canvas panning when zoomed
+    // First check if clicking on a layer
+    const hitLayerId = hitTestLayer(e.clientX, e.clientY);
+    
+    if (hitLayerId) {
+      // Start dragging layer
+      const layer = layers.find(l => l.id === hitLayerId);
+      if (layer) {
+        setIsDraggingLayer(true);
+        setDraggedLayerId(hitLayerId);
+        setLayerDragStart({
+          offsetX: layer.offsetX,
+          offsetY: layer.offsetY,
+          mouseX: e.clientX,
+          mouseY: e.clientY,
+        });
+        onLayerSelect(hitLayerId);
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    
+    // Otherwise, handle canvas panning when zoomed
     if (zoom !== 'fit') {
       setIsDragging(true);
       setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
@@ -253,7 +366,37 @@ export default function WatermarkPreviewCanvas({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (isDragging && zoom !== 'fit') {
+    if (isDraggingLayer && draggedLayerId) {
+      // Drag layer
+      const layer = layers.find(l => l.id === draggedLayerId);
+      if (!layer) return;
+      
+      const imageCoords = mouseToImageCoords(e.clientX, e.clientY);
+      const startImageCoords = mouseToImageCoords(layerDragStart.mouseX, layerDragStart.mouseY);
+      
+      const deltaX = imageCoords.x - startImageCoords.x;
+      const deltaY = imageCoords.y - startImageCoords.y;
+      
+      // Convert delta to percentage
+      const deltaOffsetX = (deltaX / image.width) * 100;
+      const deltaOffsetY = (deltaY / image.height) * 100;
+      
+      // Update layer position
+      const newOffsetX = layerDragStart.offsetX + deltaOffsetX;
+      const newOffsetY = layerDragStart.offsetY + deltaOffsetY;
+      
+      // Determine if this is a global layer or per-image override
+      // If the layer is in the override for this image, it's not global
+      const isGlobal = !selectedImageId || !job?.overrides[selectedImageId]?.some(ov => ov.id === draggedLayerId);
+      
+      updateLayer(
+        draggedLayerId,
+        { offsetX: newOffsetX, offsetY: newOffsetY },
+        isGlobal,
+        selectedImageId || undefined
+      );
+    } else if (isDragging && zoom !== 'fit') {
+      // Pan canvas
       setPan({
         x: e.clientX - dragStart.x,
         y: e.clientY - dragStart.y,
@@ -263,6 +406,8 @@ export default function WatermarkPreviewCanvas({
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setIsDraggingLayer(false);
+    setDraggedLayerId(null);
     setIsResizing(false);
   };
 
@@ -354,7 +499,7 @@ export default function WatermarkPreviewCanvas({
         {image && previewImageRef.current ? (
           <canvas
             ref={canvasRef}
-            className="cursor-move"
+            className={isDraggingLayer ? "cursor-grabbing" : "cursor-default"}
             style={{ maxWidth: '100%', maxHeight: '100%' }}
           />
         ) : image ? (
