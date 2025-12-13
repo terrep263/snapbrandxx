@@ -6,16 +6,19 @@
 
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useWatermark } from '@/lib/watermark/context';
 import { ProcessedImage, WatermarkLayer, Anchor } from '@/lib/watermark/types';
 import { LogoItem } from '@/lib/logoLibrary';
+import { supabase } from '@/lib/supabase/client';
+import { debounce } from '@/lib/utils/debounce';
 import ImageThumbnailList from './ImageThumbnailList';
 import LayersPanel from './LayersPanel';
 import EditorToolbar from './EditorToolbar';
 import DraggablePreviewCanvas from '../DraggablePreviewCanvas';
 import PropertiesPanel from './PropertiesPanel';
 import PreviewGridPanel from './PreviewGridPanel';
+import SaveStatusIndicator, { SaveStatus } from './SaveStatusIndicator';
 
 interface WatermarkEditorProps {
   images: ProcessedImage[];
@@ -44,6 +47,13 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
   const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
   const [zoom, setZoom] = useState(1);
   const [snapToGuides, setSnapToGuides] = useState(true);
+  
+  // Auto-save state
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [designId, setDesignId] = useState<string | null>(null);
+  const [designName, setDesignName] = useState('Untitled Design');
+  const autoSaveRef = useRef<ReturnType<typeof debounce> | null>(null);
 
   // Initialize job when images change
   useEffect(() => {
@@ -319,6 +329,129 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedImage, selectedLayer, handleLayerUpdate, handleLayerDelete, selectLayer]);
 
+  // Create auto-save function (debounced)
+  const performSave = useCallback(async (layers: WatermarkLayer[], name: string, currentDesignId: string | null) => {
+    setSaveStatus('saving');
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setSaveStatus('error');
+        return;
+      }
+      
+      // Prepare layers for saving (only global layers, as overrides are per-image)
+      const layersToSave = layers || [];
+      
+      if (layersToSave.length === 0 && !currentDesignId) {
+        // Don't save empty designs
+        setSaveStatus('saved');
+        return;
+      }
+      
+      // Check if design exists (has ID)
+      if (currentDesignId) {
+        // Update existing design
+        const response = await fetch(`/api/designs/${currentDesignId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            name,
+            layers: layersToSave,
+            thumbnail_url: null // Optional: generate thumbnail
+          })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Save failed');
+        }
+      } else {
+        // Create new design
+        const response = await fetch('/api/designs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            name,
+            layers: layersToSave,
+            thumbnail_url: null
+          })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Save failed');
+        }
+        
+        const data = await response.json();
+        setDesignId(data.design.id); // Store design ID for future saves
+      }
+      
+      setSaveStatus('saved');
+      setLastSaved(new Date());
+      
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      setSaveStatus('error');
+    }
+  }, []);
+
+  // Create debounced auto-save
+  const autoSave = useMemo(() => {
+    return debounce((layers: WatermarkLayer[], name: string) => {
+      performSave(layers, name, designId);
+    }, 1000); // 1 second debounce
+  }, [performSave, designId]);
+
+  // Store auto-save function in ref for cleanup
+  useEffect(() => {
+    autoSaveRef.current = autoSave;
+    return () => {
+      if (autoSaveRef.current) {
+        autoSaveRef.current.cancel();
+      }
+    };
+  }, [autoSave]);
+
+  // Trigger auto-save whenever job changes
+  useEffect(() => {
+    if (job && job.globalLayers.length > 0) {
+      setSaveStatus('unsaved');
+      autoSave(job.globalLayers, designName);
+    }
+  }, [job?.globalLayers, job?.updatedAt, designName, autoSave]);
+
+  // Handle manual retry
+  const handleRetry = useCallback(() => {
+    if (saveStatus === 'error' && job) {
+      autoSave.cancel(); // Cancel any pending saves
+      performSave(job.globalLayers, designName, designId); // Save immediately
+    }
+  }, [saveStatus, job, designName, designId, performSave, autoSave]);
+
+  // Warn user if they try to leave with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveStatus === 'unsaved' || saveStatus === 'saving') {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [saveStatus]);
+
   return (
     <div ref={containerRef} className="flex h-full w-full overflow-hidden bg-gray-800">
       {/* Left: Image Thumbnails (always visible) */}
@@ -346,6 +479,14 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
               <div className="flex-1">
                 <EditorToolbar onAddText={handleAddText} onAddLogo={handleAddLogo} />
               </div>
+              
+              {/* Save Status Indicator */}
+              <SaveStatusIndicator 
+                status={saveStatus} 
+                lastSaved={lastSaved}
+                onRetry={handleRetry}
+              />
+              
               {onNext && (
                 <button
                   onClick={onNext}

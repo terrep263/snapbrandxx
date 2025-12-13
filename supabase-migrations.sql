@@ -191,8 +191,10 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_sessions_expires_at ON user_sessions(expires_at);
-CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(user_id, expires_at) 
-  WHERE expires_at > NOW();
+-- Composite index for querying active sessions (user_id + expires_at)
+-- Note: Cannot use WHERE clause with NOW() as it's not IMMUTABLE
+-- The expires_at index above will handle filtering efficiently
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_expires ON user_sessions(user_id, expires_at);
 
 -- RLS Policies
 ALTER TABLE user_sessions ENABLE ROW LEVEL SECURITY;
@@ -204,17 +206,20 @@ CREATE POLICY user_sessions_select ON user_sessions
   USING (auth.uid() = user_id);
 
 -- Users can only insert their own sessions
-DROP POLICY IF EXISTS user_sessions_insert ON user_sessions
+DROP POLICY IF EXISTS user_sessions_insert ON user_sessions;
+CREATE POLICY user_sessions_insert ON user_sessions
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 -- Users can only update their own sessions
-DROP POLICY IF EXISTS user_sessions_update ON user_sessions
+DROP POLICY IF EXISTS user_sessions_update ON user_sessions;
+CREATE POLICY user_sessions_update ON user_sessions
   FOR UPDATE
   USING (auth.uid() = user_id);
 
 -- Users can only delete their own sessions
-DROP POLICY IF EXISTS user_sessions_delete ON user_sessions
+DROP POLICY IF EXISTS user_sessions_delete ON user_sessions;
+CREATE POLICY user_sessions_delete ON user_sessions
   FOR DELETE
   USING (auth.uid() = user_id);
 
