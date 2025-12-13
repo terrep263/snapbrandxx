@@ -113,6 +113,15 @@ export async function POST(request: NextRequest) {
       currency,
     } = data;
 
+    // Only process SnapBrandXX purchases
+    if (!product_permalink?.includes('snapbrandxx')) {
+      console.log('Ignoring webhook for different product:', product_permalink);
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Different product, ignored' 
+      });
+    }
+
     // Normalize email to lowercase
     const normalizedEmail = email?.toLowerCase().trim();
 
