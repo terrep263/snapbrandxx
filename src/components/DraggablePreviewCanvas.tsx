@@ -861,7 +861,7 @@ export default function DraggablePreviewCanvas({
                       );
                     case ShapeType.LINE:
                       return (
-                        <Line
+                        <KonvaLine
                           {...shapeProps}
                           points={[position.x - width / 2, position.y - height / 2, position.x + width / 2, position.y + height / 2]}
                           stroke={layer.fillColor || '#000000'}
