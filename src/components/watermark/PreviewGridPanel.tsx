@@ -10,7 +10,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { ProcessedImage } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
-import { applyWatermarkLayers } from '@/lib/watermark/engine';
+import { renderWatermarkedCanvas, RenderOptions } from '@/lib/watermark/render';
+import { TextVariableContext } from '@/lib/watermark/types';
 
 interface PreviewGridPanelProps {
   images: ProcessedImage[];
@@ -41,6 +42,9 @@ export default function PreviewGridPanel({
       abortControllerRef.current.abort();
     }
 
+    // Clear cache when layers change to force regeneration
+    previewCacheRef.current = {};
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
     setGenerating(true);
@@ -58,8 +62,25 @@ export default function PreviewGridPanel({
             const layers = getLayersForImage(img.id);
             const enabledLayers = layers.filter(l => l.enabled);
 
-            // Create cache key using normalized coordinates
-            const cacheKey = `${img.id}-${JSON.stringify(enabledLayers.map(l => ({ id: l.id, xNorm: l.xNorm, yNorm: l.yNorm, scale: l.scale, rotation: l.rotation, opacity: l.opacity, widthNorm: l.widthNorm })))}`;
+            // Create comprehensive cache key that includes all relevant layer properties
+            const cacheKey = `${img.id}-${JSON.stringify(enabledLayers.map(l => ({
+              id: l.id,
+              type: l.type,
+              enabled: l.enabled,
+              xNorm: l.xNorm,
+              yNorm: l.yNorm,
+              widthNorm: l.widthNorm,
+              fontSizeRelative: l.fontSizeRelative,
+              scale: l.scale,
+              rotation: l.rotation,
+              opacity: l.opacity,
+              text: l.text,
+              fontFamily: l.fontFamily,
+              color: l.color,
+              logoId: l.logoId,
+              scaleLocked: l.scaleLocked,
+              zIndex: l.zIndex,
+            })))}`;
 
             // Check cache
             if (previewCacheRef.current[cacheKey]) {
@@ -74,13 +95,31 @@ export default function PreviewGridPanel({
               return;
             }
 
-            // Generate watermarked preview at 40% for grid view
-            const previewScale = 0.4;
-            const dataUrl = await applyWatermarkLayers(
+            // Generate watermarked preview at 75% for better quality (matching main preview)
+            const previewScale = 0.75;
+            
+            // Create variable context for preview (show what variables will look like)
+            const filename = img.originalFile.name.replace(/\.[^.]+$/, ''); // Remove extension
+            const imageIndex = images.indexOf(img);
+            const variableContext: TextVariableContext = {
+              filename,
+              index: imageIndex + 1, // 1-based index
+              date: new Date(),
+            };
+            
+            const renderOptions: RenderOptions = {
+              scale: previewScale,
+              returnDataUrl: true,
+              variableContext, // Pass context so variables are replaced in preview
+            };
+            
+            const dataUrl = await renderWatermarkedCanvas(
               img.originalDataUrl,
               enabledLayers,
-              logoLibrary,
-              { scale: previewScale, returnDataUrl: true }
+              undefined, // Use image dimensions
+              undefined,
+              renderOptions,
+              logoLibrary
             ) as string;
 
             if (!controller.signal.aborted) {
@@ -102,7 +141,7 @@ export default function PreviewGridPanel({
           setPreviewUrls((prev) => ({ ...prev, ...newPreviews }));
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 50));
       }
 
       if (!controller.signal.aborted) {
@@ -110,17 +149,17 @@ export default function PreviewGridPanel({
       }
     };
 
-    // Debounce: wait 500ms before starting
+    // Reduced debounce: wait 150ms before starting for faster real-time updates
     const timeoutId = setTimeout(() => {
       generatePreviews();
-    }, 500);
+    }, 150);
 
     return () => {
       clearTimeout(timeoutId);
       controller.abort();
       setGenerating(false);
     };
-  }, [images, job, logoLibrary, getLayersForImage]);
+  }, [images, job, job?.updatedAt, job?.globalLayers, job?.overrides, logoLibrary, getLayersForImage]);
 
   return (
     <div className="h-full flex flex-col bg-gray-900 border-l border-gray-700">

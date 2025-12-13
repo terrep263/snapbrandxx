@@ -6,10 +6,11 @@
 
 'use client';
 
-import { WatermarkLayer, ProcessedImage, Anchor } from '@/lib/watermark/types';
+import { WatermarkLayer, ProcessedImage, Anchor, TextAlign } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
 import RotationDial from './RotationDial';
 import ColorPicker from './ColorPicker';
+import ShapeLayerControls from './ShapeLayerControls';
 
 interface PropertiesPanelProps {
   selectedLayer: WatermarkLayer | null;
@@ -21,6 +22,8 @@ export default function PropertiesPanel({
   selectedLayer,
   image,
   onLayerUpdate,
+  snapToGuides = true,
+  onSnapToGuidesChange,
 }: PropertiesPanelProps) {
   const { logoLibrary } = useWatermark();
 
@@ -40,22 +43,6 @@ export default function PropertiesPanel({
     );
   }
 
-  // Convert normalized (0-1) to 0-100% UI values for display
-  // Support both new (xNorm/yNorm) and legacy (offsetX/offsetY) formats
-  const xNorm = selectedLayer.xNorm ?? ((selectedLayer.offsetX ?? 0) / 100 + 0.5);
-  const yNorm = selectedLayer.yNorm ?? ((selectedLayer.offsetY ?? 0) / 100 + 0.5);
-  const xFromLeftPct = xNorm * 100;
-  const yFromTopPct = yNorm * 100;
-
-  const handleXChange = (value: number) => {
-    const xNorm = clamp(value, 0, 100) / 100;
-    onLayerUpdate(selectedLayer.id, { xNorm, anchor: Anchor.CENTER });
-  };
-
-  const handleYChange = (value: number) => {
-    const yNorm = clamp(value, 0, 100) / 100;
-    onLayerUpdate(selectedLayer.id, { yNorm, anchor: Anchor.CENTER });
-  };
 
   const handleScaleChange = (value: number) => {
     onLayerUpdate(selectedLayer.id, { scale: clamp(value, 0.1, 10) });
@@ -98,6 +85,15 @@ export default function PropertiesPanel({
                 placeholder="Enter text here..."
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-200 focus:outline-none focus:border-red-500 resize-y min-h-[80px]"
               />
+              <div className="text-xs text-gray-500 mt-2">
+                <p className="font-medium mb-1">Available variables:</p>
+                <ul className="space-y-1 text-gray-600">
+                  <li><code className="bg-gray-800 px-1.5 py-0.5 rounded">{'{filename}'}</code> - Image filename</li>
+                  <li><code className="bg-gray-800 px-1.5 py-0.5 rounded">{'{date}'}</code> - Current date</li>
+                  <li><code className="bg-gray-800 px-1.5 py-0.5 rounded">{'{year}'}</code> - Current year</li>
+                  <li><code className="bg-gray-800 px-1.5 py-0.5 rounded">{'{index}'}</code> - Image number</li>
+                </ul>
+              </div>
             </div>
             
             {/* Text Width Control */}
@@ -166,6 +162,64 @@ export default function PropertiesPanel({
                 <option value="Verdana">Verdana</option>
               </select>
             </div>
+
+            {/* Text Alignment Controls */}
+            <div>
+              <label className="block text-xs text-gray-300 mb-2">Text Alignment</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onLayerUpdate(selectedLayer.id, { textAlign: TextAlign.LEFT })}
+                  className={`flex-1 px-3 py-2 rounded transition-colors ${
+                    (selectedLayer.textAlign || TextAlign.LEFT) === TextAlign.LEFT
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Align Left"
+                >
+                  <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* Left align: all lines start at left edge */}
+                    <line x1="3" y1="6" x2="12" y2="6" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="3" y1="10" x2="18" y2="10" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="3" y1="14" x2="15" y2="14" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="3" y1="18" x2="12" y2="18" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={() => onLayerUpdate(selectedLayer.id, { textAlign: TextAlign.CENTER })}
+                  className={`flex-1 px-3 py-2 rounded transition-colors ${
+                    (selectedLayer.textAlign || TextAlign.LEFT) === TextAlign.CENTER
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Align Center"
+                >
+                  <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* Center align: lines centered, different lengths */}
+                    <line x1="6" y1="6" x2="18" y2="6" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="4" y1="14" x2="20" y2="14" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="6" y1="18" x2="18" y2="18" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={() => onLayerUpdate(selectedLayer.id, { textAlign: TextAlign.RIGHT })}
+                  className={`flex-1 px-3 py-2 rounded transition-colors ${
+                    (selectedLayer.textAlign || TextAlign.LEFT) === TextAlign.RIGHT
+                      ? 'bg-red-600 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700'
+                  }`}
+                  title="Align Right"
+                >
+                  <svg className="w-5 h-5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {/* Right align: all lines end at right edge */}
+                    <line x1="12" y1="6" x2="21" y2="6" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="6" y1="10" x2="21" y2="10" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="9" y1="14" x2="21" y2="14" strokeWidth="2" strokeLinecap="round"/>
+                    <line x1="12" y1="18" x2="21" y2="18" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -189,46 +243,34 @@ export default function PropertiesPanel({
           </div>
         )}
 
+        {/* Shape-specific Properties */}
+        {selectedLayer.type === 'shape' && (
+          <ShapeLayerControls
+            layer={selectedLayer}
+            onUpdate={(updates) => onLayerUpdate(selectedLayer.id, updates)}
+          />
+        )}
+
         {/* Position Controls */}
         <div className="space-y-4">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase">Position</h4>
-          
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-gray-300">X Position</label>
-              <span className="text-xs text-gray-400 font-mono">{xFromLeftPct.toFixed(1)}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="0.1"
-              value={xFromLeftPct}
-              onChange={(e) => handleXChange(parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-600"
-              style={{
-                background: `linear-gradient(to right, #dc2626 0%, #dc2626 ${xFromLeftPct}%, #374151 ${xFromLeftPct}%, #374151 100%)`
-              }}
-            />
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-semibold text-gray-400 uppercase">Position</h4>
           </div>
-
+          
+          {/* Snap to Guides Toggle */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-gray-300">Y Position</label>
-              <span className="text-xs text-gray-400 font-mono">{yFromTopPct.toFixed(1)}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="0.1"
-              value={yFromTopPct}
-              onChange={(e) => handleYChange(parseFloat(e.target.value))}
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-red-600"
-              style={{
-                background: `linear-gradient(to right, #dc2626 0%, #dc2626 ${yFromTopPct}%, #374151 ${yFromTopPct}%, #374151 100%)`
-              }}
-            />
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={snapToGuides}
+                onChange={(e) => onSnapToGuidesChange?.(e.target.checked)}
+                className="w-4 h-4 text-red-500 bg-gray-800 border-gray-700 rounded focus:ring-red-500 focus:ring-2"
+              />
+              <span className="text-xs text-gray-300">Snap to guides</span>
+            </label>
+            <p className="text-xs text-gray-500 mt-1 ml-6">
+              Visual guides appear on canvas. Watermarks snap to them when dragging.
+            </p>
           </div>
         </div>
 

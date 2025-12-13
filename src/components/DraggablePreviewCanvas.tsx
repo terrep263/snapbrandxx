@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Stage, Layer, Image as KonvaImage, Text as KonvaText, Transformer } from 'react-konva';
+import { Stage, Layer, Image as KonvaImage, Text as KonvaText, Transformer, Rect, Circle, Line as KonvaLine } from 'react-konva';
 import Konva from 'konva';
-import { WatermarkLayer, Anchor, ProcessedImage } from '@/lib/watermark/types';
+import { WatermarkLayer, Anchor, ProcessedImage, TextAlign, ShapeType, TextVariableContext } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
 import { useElementSize } from '@/lib/hooks/useElementSize';
 import { screenToNorm, normToScreen, legacyOffsetsToNorm, migrateLayerToNorm } from '@/lib/watermark/utils';
+import { snapPosition, DEFAULT_HORIZONTAL_GUIDES, DEFAULT_VERTICAL_GUIDES, SnapPositionResult } from '@/lib/watermark/snapping';
+import { replaceTextVariables } from '@/lib/watermark/variables';
 
 interface DraggablePreviewCanvasProps {
   image: ProcessedImage | null;
@@ -57,6 +59,8 @@ export default function DraggablePreviewCanvas({
   zoom: externalZoom,
   onZoomChange,
   onFitToView,
+  snapToGuides: externalSnapToGuides,
+  onSnapToGuidesChange,
 }: DraggablePreviewCanvasProps) {
   const { logoLibrary } = useWatermark();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -69,7 +73,38 @@ export default function DraggablePreviewCanvas({
   const [internalZoom, setInternalZoom] = useState(1);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [internalSnapToGuides, setInternalSnapToGuides] = useState(true);
+  const snapToGuides = externalSnapToGuides !== undefined ? externalSnapToGuides : internalSnapToGuides;
+  
+  const handleSnapToggle = useCallback((enabled: boolean) => {
+    if (onSnapToGuidesChange) {
+      onSnapToGuidesChange(enabled);
+    } else {
+      setInternalSnapToGuides(enabled);
+    }
+  }, [onSnapToGuidesChange]);
+  const [activeGuides, setActiveGuides] = useState<{
+    horizontal: number | null;
+    vertical: number | null;
+  }>({ horizontal: null, vertical: null });
   const containerSize = useElementSize(containerRef);
+  
+  // Store references to Konva nodes for linked layers (for real-time updates during drag)
+  const layerNodeRefs = useRef<Map<string, Konva.Node>>(new Map());
+  
+  // Create variable context for preview (show what variables will look like)
+  const variableContext: TextVariableContext | undefined = image ? {
+    filename: image.originalFile.name.replace(/\.[^.]+$/, ''), // Remove extension
+    index: 1, // Default to 1 for single image preview
+    date: new Date(),
+  } : undefined;
+  
+  // Track initial transform values when transform starts
+  const transformStartRef = useRef<{
+    layerId: string;
+    initialScale: number;
+    initialRotation: number;
+  } | null>(null);
   
   const DRAG_DEAD_ZONE = 5; // pixels
   
@@ -98,33 +133,58 @@ export default function DraggablePreviewCanvas({
     img.src = image.originalDataUrl;
   }, [image?.originalDataUrl]);
 
+  // Track loaded logo IDs to force re-render when logos load
+  const [loadedLogoIds, setLoadedLogoIds] = useState<Set<string>>(new Set());
+  const loadingLogosRef = useRef<Set<string>>(new Set());
+  
   // Load logo images
   useEffect(() => {
     if (!logoLibrary) return;
 
     const logoLayers = layers.filter(l => l.type === 'logo' && l.logoId && l.enabled);
-    const loadedLogos = new Set<string>();
 
     logoLayers.forEach(layer => {
       if (!layer.logoId) return;
       const logo = logoLibrary.get(layer.logoId);
-      if (!logo || logoImageRefs.current.has(layer.logoId)) {
-        if (logo) loadedLogos.add(layer.logoId);
+      
+      // If logo is already loaded, skip
+      if (logoImageRefs.current.has(layer.logoId)) {
+        return;
+      }
+      
+      // If logo is already loading, skip
+      if (loadingLogosRef.current.has(layer.logoId)) {
+        return;
+      }
+      
+      // If logo not found in library, skip (might be loading)
+      if (!logo) {
         return;
       }
 
+      // Mark as loading
+      loadingLogosRef.current.add(layer.logoId);
+
+      // Start loading the logo
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         logoImageRefs.current.set(layer.logoId!, img);
-        loadedLogos.add(layer.logoId!);
-        // Force re-render by updating state
-        if (loadedLogos.size === logoLayers.length) {
+        loadingLogosRef.current.delete(layer.logoId!);
+        // Update state to trigger re-render
+        setLoadedLogoIds(prev => {
+          const updated = new Set(prev);
+          updated.add(layer.logoId!);
+          return updated;
+        });
+        // Force immediate redraw
+        requestAnimationFrame(() => {
           stageRef.current?.batchDraw();
-        }
+        });
       };
       img.onerror = () => {
         console.error(`Failed to load logo: ${layer.logoId}`);
+        loadingLogosRef.current.delete(layer.logoId!);
       };
       img.src = logo.imageData;
     });
@@ -134,6 +194,11 @@ export default function DraggablePreviewCanvas({
     for (const [logoId] of logoImageRefs.current) {
       if (!usedLogoIds.has(logoId)) {
         logoImageRefs.current.delete(logoId);
+        setLoadedLogoIds(prev => {
+          const updated = new Set(prev);
+          updated.delete(logoId);
+          return updated;
+        });
       }
     }
   }, [layers, logoLibrary]);
@@ -198,9 +263,9 @@ export default function DraggablePreviewCanvas({
     setIsDragging(false);
   }, []);
 
-  // Handle drag move - check dead-zone
+  // Handle drag move - check dead-zone and update linked layers in real-time
   const handleDragMove = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
-    if (!dragStartPos) return;
+    if (!dragStartPos || !image) return;
     
     const node = e.target;
     const dx = Math.abs(node.x() - dragStartPos.x);
@@ -211,12 +276,69 @@ export default function DraggablePreviewCanvas({
       setIsDragging(true);
     }
 
+    // Find the layer being dragged by node name
+    const nodeName = node.name();
+    if (!nodeName || !nodeName.startsWith('layer-')) return;
+    
+    const draggedLayerId = nodeName.replace('layer-', '');
+    const draggedLayer = normalizedLayers.find(l => l.id === draggedLayerId);
+    
+    if (!draggedLayer) return;
+
+    // Get current position in normalized coordinates
+    const currentXNorm = screenToNorm(node.x(), node.y(), image.width, image.height).xNorm;
+    const currentYNorm = screenToNorm(node.x(), node.y(), image.width, image.height).yNorm;
+
+    // Apply snapping
+    const snapped = snapPosition(
+      currentXNorm,
+      currentYNorm,
+      DEFAULT_HORIZONTAL_GUIDES,
+      DEFAULT_VERTICAL_GUIDES,
+      snapToGuides,
+      0.03 // 3% threshold
+    );
+
+    // Convert snapped position back to screen coordinates
+    const { x: snappedX, y: snappedY } = normToScreen(snapped.xNorm, snapped.yNorm, image.width, image.height);
+
     // Clamp to canvas bounds
-    if (image) {
-      node.x(clamp(node.x(), 0, image.width));
-      node.y(clamp(node.y(), 0, image.height));
+    const newX = clamp(snappedX, 0, image.width);
+    const newY = clamp(snappedY, 0, image.height);
+    node.x(newX);
+    node.y(newY);
+
+    // Update active guides for visual feedback
+    setActiveGuides(snapped.activeGuides);
+
+    // Update linked layers in real-time (smooth movement)
+    if (draggedLayer.groupId) {
+      const linkedLayers = normalizedLayers.filter(
+        l => l.groupId === draggedLayer.groupId && l.id !== draggedLayer.id
+      );
+
+      linkedLayers.forEach(linkedLayer => {
+        const linkedNode = layerNodeRefs.current.get(linkedLayer.id);
+        if (linkedNode) {
+          // Calculate relative offset from original positions
+          const draggedOriginalX = draggedLayer.xNorm * image.width;
+          const draggedOriginalY = draggedLayer.yNorm * image.height;
+          const linkedOriginalX = linkedLayer.xNorm * image.width;
+          const linkedOriginalY = linkedLayer.yNorm * image.height;
+          
+          const offsetX = linkedOriginalX - draggedOriginalX;
+          const offsetY = linkedOriginalY - draggedOriginalY;
+          
+          // Update position maintaining relative offset
+          const linkedX = clamp(newX + offsetX, 0, image.width);
+          const linkedY = clamp(newY + offsetY, 0, image.height);
+          
+          linkedNode.x(linkedX);
+          linkedNode.y(linkedY);
+        }
+      });
     }
-  }, [dragStartPos, isDragging, image]);
+  }, [dragStartPos, isDragging, image, normalizedLayers, snapToGuides]);
 
   // Handle drag end - convert to normalized coordinates
   const handleDragEnd = useCallback((layer: WatermarkLayer, node: Konva.Node) => {
@@ -225,7 +347,18 @@ export default function DraggablePreviewCanvas({
     const x = clamp(node.x(), 0, image.width);
     const y = clamp(node.y(), 0, image.height);
 
-    const { xNorm, yNorm } = screenToNorm(x, y, image.width, image.height);
+    // Apply final snapping before saving
+    const { xNorm: rawXNorm, yNorm: rawYNorm } = screenToNorm(x, y, image.width, image.height);
+    const finalSnapped = snapPosition(
+      rawXNorm,
+      rawYNorm,
+      DEFAULT_HORIZONTAL_GUIDES,
+      DEFAULT_VERTICAL_GUIDES,
+      snapToGuides,
+      0.03
+    );
+    
+    const { xNorm, yNorm } = { xNorm: finalSnapped.xNorm, yNorm: finalSnapped.yNorm };
 
     // Get all layers in the same group
     const groupId = layer.groupId;
@@ -259,7 +392,91 @@ export default function DraggablePreviewCanvas({
 
     setDragStartPos(null);
     setIsDragging(false);
+    // Clear active guides when drag ends
+    setActiveGuides({ horizontal: null, vertical: null });
   }, [image, onLayerUpdate, normalizedLayers]);
+
+  // Handle transform start - track initial values for all layers in the group
+  const handleTransformStart = useCallback((e: Konva.KonvaEventObject<Event>) => {
+    const node = e.target;
+    const nodeName = node.name();
+    if (!nodeName || !nodeName.startsWith('layer-')) return;
+    
+    const layerId = nodeName.replace('layer-', '');
+    const layer = normalizedLayers.find(l => l.id === layerId);
+    
+    // Store initial values for the dragged layer
+    const initialData: { [key: string]: { scale: number; rotation: number } } = {};
+    initialData[layerId] = {
+      scale: node.scaleX(),
+      rotation: node.rotation(),
+    };
+    
+    // Store initial values for all linked layers
+    if (layer?.groupId) {
+      const linkedLayers = normalizedLayers.filter(
+        l => l.groupId === layer.groupId
+      );
+      linkedLayers.forEach(linkedLayer => {
+        const linkedNode = layerNodeRefs.current.get(linkedLayer.id);
+        if (linkedNode) {
+          initialData[linkedLayer.id] = {
+            scale: linkedNode.scaleX(),
+            rotation: linkedNode.rotation(),
+          };
+        }
+      });
+    }
+    
+    transformStartRef.current = {
+      layerId,
+      initialScale: node.scaleX(),
+      initialRotation: node.rotation(),
+      initialData,
+    } as any;
+  }, [normalizedLayers]);
+
+  // Handle transform (real-time scaling/rotation) - update linked layers in real-time
+  const handleTransform = useCallback((e: Konva.KonvaEventObject<Event>) => {
+    if (!image || !transformStartRef.current) return;
+    
+    const node = e.target;
+    const nodeName = node.name();
+    if (!nodeName || !nodeName.startsWith('layer-')) return;
+    
+    const layerId = nodeName.replace('layer-', '');
+    const layer = normalizedLayers.find(l => l.id === layerId);
+    if (!layer || !layer.groupId) return;
+
+    const currentScaleX = node.scaleX();
+    const currentRotation = node.rotation();
+    const { initialScale, initialRotation } = transformStartRef.current;
+
+    // Calculate scale and rotation deltas
+    const scaleDelta = currentScaleX / initialScale;
+    const rotationDelta = currentRotation - initialRotation;
+
+    // Update linked layers in real-time during transform
+    const linkedLayers = normalizedLayers.filter(
+      l => l.groupId === layer.groupId && l.id !== layer.id
+    );
+
+    linkedLayers.forEach(linkedLayer => {
+      const linkedNode = layerNodeRefs.current.get(linkedLayer.id);
+      if (linkedNode && transformStartRef.current?.initialData) {
+        const initialData = (transformStartRef.current as any).initialData[linkedLayer.id];
+        if (initialData) {
+          // Apply same scale change proportionally from initial scale
+          const newLinkedScale = clamp(initialData.scale * scaleDelta, 0.1, 10);
+          linkedNode.scaleX(newLinkedScale);
+          linkedNode.scaleY(newLinkedScale);
+          
+          // Apply same rotation change from initial rotation
+          linkedNode.rotation(initialData.rotation + rotationDelta);
+        }
+      }
+    });
+  }, [image, normalizedLayers]);
 
   // Handle transform end - convert to normalized coordinates and update scale
   const handleTransformEnd = useCallback((layer: WatermarkLayer, node: Konva.Node) => {
@@ -270,8 +487,13 @@ export default function DraggablePreviewCanvas({
     const rotation = node.rotation();
     const scaleX = node.scaleX();
 
+    // Calculate scale change from initial
+    const scaleDelta = transformStartRef.current?.layerId === layer.id && transformStartRef.current?.initialScale
+      ? scaleX / transformStartRef.current.initialScale
+      : scaleX;
+
     // Update layer scale (uniform scaling)
-    const newScale = clamp(layer.scale * scaleX, 0.1, 10);
+    const newScale = clamp(layer.scale * scaleDelta, 0.1, 10);
 
     // Reset node scale to prevent compounding
     node.scaleX(1);
@@ -285,12 +507,17 @@ export default function DraggablePreviewCanvas({
       widthNorm = (layer.naturalLogoWidth * newScale) / image.width;
     }
 
+    // Calculate rotation change
+    const rotationDelta = transformStartRef.current?.layerId === layer.id && transformStartRef.current?.initialRotation !== undefined
+      ? rotation - transformStartRef.current.initialRotation
+      : rotation - (layer.rotation || 0);
+
     const updates: Partial<WatermarkLayer> = {
       xNorm,
       yNorm,
       anchor: Anchor.CENTER,
       scale: newScale,
-      rotation: rotation % 360,
+      rotation: (layer.rotation || 0) + rotationDelta,
     };
 
     if (widthNorm !== undefined) {
@@ -303,11 +530,25 @@ export default function DraggablePreviewCanvas({
       normalizedLayers
         .filter(l => l.groupId === groupId && l.id !== layer.id)
         .forEach(groupLayer => {
-          const groupScale = clamp(groupLayer.scale * scaleX, 0.1, 10);
+          // Get initial scale from transform start data
+          const initialData = (transformStartRef.current as any)?.initialData?.[groupLayer.id];
+          const groupInitialScale = initialData?.scale ?? (groupLayer.scale || 1);
+          const groupInitialRotation = initialData?.rotation ?? (groupLayer.rotation || 0);
+          
+          const groupScale = clamp(groupInitialScale * scaleDelta, 0.1, 10);
+          const groupRotation = (groupInitialRotation + rotationDelta) % 360;
+          
+          // Reset linked node scale to prevent compounding
+          const linkedNode = layerNodeRefs.current.get(groupLayer.id);
+          if (linkedNode) {
+            linkedNode.scaleX(1);
+            linkedNode.scaleY(1);
+          }
+          
           onLayerUpdate({
             ...groupLayer,
             scale: groupScale,
-            rotation: (groupLayer.rotation + (rotation % 360 - layer.rotation)) % 360,
+            rotation: groupRotation,
           });
         });
     }
@@ -316,6 +557,12 @@ export default function DraggablePreviewCanvas({
       ...layer,
       ...updates,
     });
+
+    // Reset transform start reference
+    transformStartRef.current = null;
+
+    // Reset transform start reference
+    transformStartRef.current = null;
   }, [image, onLayerUpdate, normalizedLayers]);
 
   // Handle click on stage (deselect)
@@ -385,6 +632,43 @@ export default function DraggablePreviewCanvas({
                 />
               )}
 
+              {/* Guidelines overlay - Only visible during drag */}
+              {isDragging && snapToGuides && (
+                <>
+                  {/* Vertical guides */}
+                  {DEFAULT_VERTICAL_GUIDES.map((guide) => {
+                    const x = guide * image.width;
+                    const isActive = activeGuides.vertical === guide;
+                    return (
+                      <KonvaLine
+                        key={`v-${guide}`}
+                        points={[x, 0, x, image.height]}
+                        stroke={isActive ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.8)'}
+                        strokeWidth={5}
+                        listening={false}
+                        perfectDrawEnabled={false}
+                      />
+                    );
+                  })}
+                  
+                  {/* Horizontal guides */}
+                  {DEFAULT_HORIZONTAL_GUIDES.map((guide) => {
+                    const y = guide * image.height;
+                    const isActive = activeGuides.horizontal === guide;
+                    return (
+                      <KonvaLine
+                        key={`h-${guide}`}
+                        points={[0, y, image.width, y]}
+                        stroke={isActive ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.8)'}
+                        strokeWidth={5}
+                        listening={false}
+                        perfectDrawEnabled={false}
+                      />
+                    );
+                  })}
+                </>
+              )}
+
               {/* Render layers */}
               {sortedLayers.map((layer) => {
                 if (!layer.enabled) return null;
@@ -401,13 +685,22 @@ export default function DraggablePreviewCanvas({
                     ? (image.width * layer.textWidthPercent / 100) * layer.scale
                     : undefined; // Auto width if not specified
                   
+                  // Convert TextAlign enum to Konva align string
+                  const konvaAlign = layer.textAlign === TextAlign.LEFT 
+                    ? 'left' 
+                    : layer.textAlign === TextAlign.RIGHT 
+                    ? 'right' 
+                    : 'center'; // Default to center if not specified
+                  
                   return (
                     <KonvaText
                       key={layer.id}
                       name={`layer-${layer.id}`}
                       x={position.x}
                       y={position.y}
-                      text={layer.text}
+                      text={variableContext && layer.text 
+                        ? replaceTextVariables(layer.text, variableContext)
+                        : (layer.text || '')}
                       fontSize={fontSizePx}
                       fontFamily={layer.fontFamily || 'Inter'}
                       fontStyle={layer.fontStyle || 'normal'}
@@ -415,7 +708,7 @@ export default function DraggablePreviewCanvas({
                       fill={layer.color || '#ffffff'}
                       opacity={layer.opacity ?? 1}
                       rotation={layer.rotation ?? 0}
-                      align="center"
+                      align={konvaAlign}
                       verticalAlign="middle"
                       width={textWidth}
                       wrap="word"
@@ -431,6 +724,8 @@ export default function DraggablePreviewCanvas({
                           handleDragEnd(layer, node);
                         }
                       }}
+                      onTransformStart={handleTransformStart}
+                      onTransform={handleTransform}
                       onTransformEnd={(e) => {
                         if (!layer.locked) {
                           const node = e.target;
@@ -457,10 +752,11 @@ export default function DraggablePreviewCanvas({
                         }
                       }}
                       ref={(node) => {
-                        // Center text on its position by setting offset after measurement
+                        // Store node reference for linked layer updates
                         if (node) {
+                          layerNodeRefs.current.set(layer.id, node);
+                          // Center text on its position by setting offset after measurement
                           const textNode = node as Konva.Text;
-                          // Measure text after it's rendered
                           requestAnimationFrame(() => {
                             const width = textNode.width();
                             const height = textNode.height();
@@ -470,10 +766,112 @@ export default function DraggablePreviewCanvas({
                               textNode.getLayer()?.batchDraw();
                             }
                           });
+                        } else {
+                          layerNodeRefs.current.delete(layer.id);
                         }
                       }}
                     />
                   );
+                } else if (layer.type === 'shape' && layer.shapeType) {
+                  // Shape layer
+                  const width = image.width * (layer.widthNorm || 0.3);
+                  const height = image.height * (layer.heightNorm || 0.2);
+                  
+                  const shapeProps = {
+                    key: layer.id,
+                    name: `layer-${layer.id}`,
+                    x: position.x - width / 2,
+                    y: position.y - height / 2,
+                    width,
+                    height,
+                    opacity: (layer.fillOpacity || 0.6) * (layer.opacity ?? 1),
+                    rotation: layer.rotation ?? 0,
+                    draggable: !layer.locked,
+                    onClick: () => handleLayerClick(layer.id),
+                    onTap: () => handleLayerClick(layer.id),
+                    onDragStart: handleDragStart,
+                    onDragMove: handleDragMove,
+                    onDragEnd: (e: Konva.KonvaEventObject<DragEvent>) => {
+                      if (!layer.locked) {
+                        const node = e.target;
+                        handleDragEnd(layer, node);
+                      }
+                    },
+                    onTransformStart: handleTransformStart,
+                    onTransform: handleTransform,
+                    onTransformEnd: (e: Konva.KonvaEventObject<Event>) => {
+                      if (!layer.locked) {
+                        const node = e.target;
+                        handleTransformEnd(layer, node);
+                      }
+                    },
+                    onMouseEnter: (e: Konva.KonvaEventObject<MouseEvent>) => {
+                      if (!layer.locked) {
+                        const stage = e.target.getStage();
+                        if (stage) {
+                          stage.container().style.cursor = 'move';
+                        }
+                      }
+                    },
+                    onMouseLeave: (e: Konva.KonvaEventObject<MouseEvent>) => {
+                      const stage = e.target.getStage();
+                      if (stage) {
+                        stage.container().style.cursor = 'default';
+                      }
+                    },
+                    ref: (node: Konva.Node | null) => {
+                      if (node) {
+                        layerNodeRefs.current.set(layer.id, node);
+                      }
+                    },
+                  };
+
+                  switch (layer.shapeType) {
+                    case ShapeType.RECTANGLE:
+                      return (
+                        <Rect
+                          {...shapeProps}
+                          fill={layer.fillColor || '#000000'}
+                          stroke={layer.strokeColor}
+                          strokeWidth={layer.strokeWidth || 0}
+                        />
+                      );
+                    case ShapeType.ROUNDED_RECTANGLE:
+                      return (
+                        <Rect
+                          {...shapeProps}
+                          fill={layer.fillColor || '#000000'}
+                          stroke={layer.strokeColor}
+                          strokeWidth={layer.strokeWidth || 0}
+                          cornerRadius={layer.cornerRadius || 8}
+                        />
+                      );
+                    case ShapeType.CIRCLE:
+                      const radius = Math.min(width, height) / 2;
+                      return (
+                        <Circle
+                          {...shapeProps}
+                          x={position.x}
+                          y={position.y}
+                          radius={radius}
+                          fill={layer.fillColor || '#000000'}
+                          stroke={layer.strokeColor}
+                          strokeWidth={layer.strokeWidth || 0}
+                        />
+                      );
+                    case ShapeType.LINE:
+                      return (
+                        <Line
+                          {...shapeProps}
+                          points={[position.x - width / 2, position.y - height / 2, position.x + width / 2, position.y + height / 2]}
+                          stroke={layer.fillColor || '#000000'}
+                          strokeWidth={(layer.strokeWidth || 2) * layer.scale}
+                          lineCap="round"
+                        />
+                      );
+                    default:
+                      return null;
+                  }
                 } else if (layer.type === 'logo' && layer.logoId) {
                   // Logo layer
                   const logoImg = logoImageRefs.current.get(layer.logoId);
@@ -498,6 +896,13 @@ export default function DraggablePreviewCanvas({
                       offsetX={logoWidth / 2}
                       offsetY={logoHeight / 2}
                       draggable={!layer.locked}
+                      ref={(node) => {
+                        if (node) {
+                          layerNodeRefs.current.set(layer.id, node);
+                        } else {
+                          layerNodeRefs.current.delete(layer.id);
+                        }
+                      }}
                       onClick={() => handleLayerClick(layer.id)}
                       onTap={() => handleLayerClick(layer.id)}
                       onDragStart={handleDragStart}
@@ -508,6 +913,8 @@ export default function DraggablePreviewCanvas({
                           handleDragEnd(layer, node);
                         }
                       }}
+                      onTransformStart={handleTransformStart}
+                      onTransform={handleTransform}
                       onTransformEnd={(e) => {
                         if (!layer.locked) {
                           const node = e.target;

@@ -6,6 +6,7 @@
 
 'use client';
 
+import { useState, useRef } from 'react';
 import { WatermarkLayer } from '@/lib/watermark/types';
 
 interface LayersPanelProps {
@@ -31,6 +32,10 @@ export default function LayersPanel({
 }: LayersPanelProps) {
   // Sort layers by zIndex descending (top layer first)
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
+  
+  // Track which layer is waiting to be linked (clicked "Link" button)
+  const [linkingLayerId, setLinkingLayerId] = useState<string | null>(null);
+  const dragOverLayerId = useRef<string | null>(null);
 
   const handleToggleVisibility = (layer: WatermarkLayer) => {
     onLayerUpdate(layer.id, { enabled: !layer.enabled });
@@ -50,10 +55,58 @@ export default function LayersPanel({
     onLayerReorder(layer.id, direction);
   };
 
-  const handleGroup = () => {
-    if (!onGroupLayers || !selectedLayerId) return;
-    // For now, just group the selected layer with itself (can be extended later)
-    onGroupLayers([selectedLayerId]);
+  const handleGroup = (layerId: string) => {
+    if (!onGroupLayers) return;
+    
+    const layer = layers.find(l => l.id === layerId);
+    if (!layer) return;
+    
+    // If already in linking mode, link this layer with the waiting layer
+    if (linkingLayerId && linkingLayerId !== layerId) {
+      // Link the two layers together
+      onGroupLayers([linkingLayerId, layerId]);
+      setLinkingLayerId(null);
+      return;
+    }
+    
+    // If already linked, unlink it first
+    if (layer.groupId) {
+      if (onUngroupLayer) {
+        onUngroupLayer(layerId);
+      }
+      setLinkingLayerId(null);
+      return;
+    }
+    
+    // Start linking mode - wait for another layer to be clicked
+    setLinkingLayerId(layerId);
+  };
+  
+  // Handle drag and drop to link layers
+  const handleDragStart = (e: React.DragEvent, layerId: string) => {
+    e.dataTransfer.effectAllowed = 'link';
+    e.dataTransfer.setData('text/plain', layerId);
+  };
+  
+  const handleDragOver = (e: React.DragEvent, layerId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'link';
+    dragOverLayerId.current = layerId;
+  };
+  
+  const handleDragLeave = () => {
+    dragOverLayerId.current = null;
+  };
+  
+  const handleDrop = (e: React.DragEvent, targetLayerId: string) => {
+    e.preventDefault();
+    const draggedLayerId = e.dataTransfer.getData('text/plain');
+    dragOverLayerId.current = null;
+    
+    if (draggedLayerId && draggedLayerId !== targetLayerId && onGroupLayers) {
+      // Link the dragged layer with the target layer
+      onGroupLayers([draggedLayerId, targetLayerId]);
+    }
   };
 
   const handleUngroup = (layer: WatermarkLayer) => {
@@ -70,6 +123,15 @@ export default function LayersPanel({
           {sortedLayers.length} layer{sortedLayers.length !== 1 ? 's' : ''}
         </p>
       </div>
+
+      {/* Linking Mode Indicator */}
+      {linkingLayerId && (
+        <div className="px-4 py-2 bg-blue-600/20 border-b border-blue-500/30">
+          <p className="text-xs text-blue-300">
+            💡 Linking mode: Click another layer to link, or drag a layer onto another to link them
+          </p>
+        </div>
+      )}
 
       {/* Layers List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
@@ -91,12 +153,31 @@ export default function LayersPanel({
                     isSelected
                       ? 'border-red-500 bg-red-500/10'
                       : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                  } ${!layer.enabled ? 'opacity-50' : ''}`}
+                  } ${!layer.enabled ? 'opacity-50' : ''} ${
+                    dragOverLayerId.current === layer.id ? 'border-blue-500 bg-blue-500/20' : ''
+                  } ${linkingLayerId === layer.id ? 'ring-2 ring-blue-500' : ''}`}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, layer.id)}
+                  onDragOver={(e) => handleDragOver(e, layer.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, layer.id)}
                 >
                   {/* Layer Row */}
                   <div
-                    onClick={() => onLayerSelect(layer.id)}
-                    className="p-3 cursor-pointer"
+                    onClick={() => {
+                      // If in linking mode, link with this layer
+                      if (linkingLayerId && linkingLayerId !== layer.id) {
+                        handleGroup(layer.id);
+                        onLayerSelect(layer.id); // Select the newly linked layer
+                      } else {
+                        onLayerSelect(layer.id);
+                      }
+                    }}
+                    className={`p-3 cursor-pointer ${
+                      linkingLayerId && linkingLayerId !== layer.id && !layer.groupId
+                        ? 'hover:bg-blue-500/20'
+                        : ''
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       {/* Layer Type Icon */}
@@ -106,10 +187,17 @@ export default function LayersPanel({
 
                       {/* Layer Label */}
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-200 truncate">
-                          {layer.type === 'text'
-                            ? (layer.text ? layer.text.substring(0, 20) : 'Text Layer')
-                            : 'Logo'}
+                        <div className="flex items-center gap-1">
+                          <div className="text-sm text-gray-200 truncate">
+                            {layer.type === 'text'
+                              ? (layer.text ? layer.text.substring(0, 20) : 'Text Layer')
+                              : 'Logo'}
+                          </div>
+                          {layer.groupId && (
+                            <span className="text-xs text-blue-400" title="Linked with other layer(s)">
+                              🔗
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -187,23 +275,45 @@ export default function LayersPanel({
                             e.stopPropagation();
                             handleUngroup(layer);
                           }}
-                          className="flex-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
-                          title="Ungroup"
+                          className="flex-1 px-2 py-1 text-xs bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+                          title="Unlink this layer"
                         >
-                          🔗 Ungroup
+                          🔗 Unlink
                         </button>
                       ) : (
                         onGroupLayers && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleGroup();
-                            }}
-                            className="flex-1 px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
-                            title="Link with next layer"
-                          >
-                            🔗 Link
-                          </button>
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGroup(layer.id);
+                              }}
+                              className={`flex-1 px-2 py-1 text-xs rounded transition-colors ${
+                                linkingLayerId === layer.id
+                                  ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                              }`}
+                              title={
+                                linkingLayerId === layer.id
+                                  ? 'Click another layer to link, or click again to cancel'
+                                  : 'Click to link this layer with another layer (or drag onto another layer)'
+                              }
+                            >
+                              {linkingLayerId === layer.id ? '⏳ Linking...' : '🔗 Link'}
+                            </button>
+                            {linkingLayerId === layer.id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLinkingLayerId(null);
+                                }}
+                                className="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                                title="Cancel linking"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </>
                         )
                       )}
                     </div>

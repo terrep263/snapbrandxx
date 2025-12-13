@@ -22,6 +22,7 @@ import {
   LogoEffect,
   TileMode,
   TextAlign,
+  ShapeType,
   DEFAULT_TEXT_PRESETS,
 } from './types';
 import { LogoItem, getAllLogos, saveLogo, deleteLogo, updateLogoName } from '../logoLibrary';
@@ -63,6 +64,57 @@ type WatermarkAction =
   | { type: 'ADD_LOGO'; payload: LogoItem }
   | { type: 'REMOVE_LOGO'; payload: string }
   | { type: 'UPDATE_LOGO'; payload: LogoItem };
+
+// Basic localStorage fallback for session persistence
+const JOB_STORAGE_KEY = 'snapbrandxx-current-job';
+
+// Save job layers to localStorage (minimal - just layer config, not images)
+function saveJobToStorage(job: Job | null) {
+  if (!job) {
+    localStorage.removeItem(JOB_STORAGE_KEY);
+    return;
+  }
+  
+  try {
+    // Only save layer configuration, not the full images (too large for localStorage)
+    const jobData = {
+      id: job.id,
+      globalLayers: job.globalLayers,
+      overrides: job.overrides,
+      brandProfileId: job.brandProfileId,
+      templateId: job.templateId,
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      // Store minimal image metadata (just IDs) for reference
+      imageIds: job.images.map(img => img.id),
+    };
+    localStorage.setItem(JOB_STORAGE_KEY, JSON.stringify(jobData));
+  } catch (error) {
+    console.warn('Failed to save job to localStorage:', error);
+  }
+}
+
+// Load job layers from localStorage
+function loadJobFromStorage(): Partial<Job> | null {
+  try {
+    const stored = localStorage.getItem(JOB_STORAGE_KEY);
+    if (!stored) return null;
+    
+    const jobData = JSON.parse(stored);
+    return {
+      id: jobData.id,
+      globalLayers: jobData.globalLayers || [],
+      overrides: jobData.overrides || {},
+      brandProfileId: jobData.brandProfileId,
+      templateId: jobData.templateId,
+      createdAt: jobData.createdAt,
+      updatedAt: jobData.updatedAt,
+    };
+  } catch (error) {
+    console.warn('Failed to load job from localStorage:', error);
+    return null;
+  }
+}
 
 const initialState: WatermarkState = {
   job: null,
@@ -336,6 +388,7 @@ interface WatermarkContextValue extends WatermarkState {
   // Helper: Create default layers
   createDefaultTextLayer: (text?: string) => WatermarkLayer;
   createDefaultLogoLayer: (logoId: string) => WatermarkLayer;
+  createDefaultShapeLayer: (shapeType?: string) => WatermarkLayer;
 }
 
 const WatermarkContext = createContext<WatermarkContextValue | null>(null);
@@ -538,10 +591,44 @@ export function WatermarkProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.job]);
 
+  const createDefaultShapeLayer = useCallback((shapeType: string = ShapeType.RECTANGLE): WatermarkLayer => {
+    const maxZIndex = state.job?.globalLayers && state.job.globalLayers.length > 0
+      ? Math.max(...state.job.globalLayers.map(l => l.zIndex))
+      : 0;
+
+    return {
+      id: `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'shape',
+      zIndex: maxZIndex + 1,
+      enabled: true,
+      anchor: Anchor.CENTER,
+      xNorm: 0.5, // Center of image
+      yNorm: 0.5,
+      offsetX: -5, // Legacy support
+      offsetY: -5,
+      scale: 1.0,
+      rotation: 0,
+      opacity: 1.0,
+      tileMode: TileMode.NONE,
+      effect: 'solid',
+      shapeType: shapeType as ShapeType,
+      widthNorm: 0.3, // 30% of image width
+      heightNorm: 0.2, // 20% of image height
+      fillColor: '#000000',
+      fillOpacity: 0.6,
+      strokeWidth: 0,
+    };
+  }, [state.job]);
+
   // Load logos on mount
   useEffect(() => {
     loadLogos();
   }, [loadLogos]);
+
+  // Auto-save job to localStorage whenever it changes
+  useEffect(() => {
+    saveJobToStorage(state.job);
+  }, [state.job]);
 
   const value: WatermarkContextValue = {
     ...state,
@@ -565,6 +652,7 @@ export function WatermarkProvider({ children }: { children: React.ReactNode }) {
     getLayersForImage,
     createDefaultTextLayer,
     createDefaultLogoLayer,
+    createDefaultShapeLayer,
   };
 
   return <WatermarkContext.Provider value={value}>{children}</WatermarkContext.Provider>;

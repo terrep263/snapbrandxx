@@ -17,6 +17,7 @@ interface LayerListSectionProps {
   onLayerSelect: (layerId: string | null) => void;
   onAddTextLayer: () => void;
   onAddLogoLayer: (logoId: string) => void;
+  onAddShapeLayer?: (shapeType?: string) => void;
   onDeleteLayer: () => void;
 }
 
@@ -26,6 +27,7 @@ export default function LayerListSection({
   onLayerSelect,
   onAddTextLayer,
   onAddLogoLayer,
+  onAddShapeLayer,
   onDeleteLayer,
 }: LayerListSectionProps) {
   const { logoLibrary } = useWatermark();
@@ -43,21 +45,30 @@ export default function LayerListSection({
         </p>
         
         {/* Prominent Add Buttons */}
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button
             onClick={onAddTextLayer}
-            className="flex-1 px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
+            className="flex-1 min-w-[100px] px-4 py-3 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
           >
             <span className="text-lg">+</span>
             <span>Add Text</span>
           </button>
           <button
             onClick={() => setShowLogoPicker(true)}
-            className="flex-1 px-4 py-3 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
+            className="flex-1 min-w-[100px] px-4 py-3 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
           >
             <span className="text-lg">+</span>
             <span>Add Logo</span>
           </button>
+          {onAddShapeLayer && (
+            <button
+              onClick={() => onAddShapeLayer('rectangle')}
+              className="flex-1 min-w-[100px] px-4 py-3 bg-gray-700 hover:bg-gray-600 text-gray-100 rounded-lg transition-colors font-medium text-sm flex items-center justify-center gap-2"
+            >
+              <span className="text-lg">+</span>
+              <span>Add Shape</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -111,16 +122,16 @@ export default function LayerListSection({
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       {/* Icon */}
                       <div className={`text-2xl flex-shrink-0 ${
-                        layer.type === 'text' ? 'text-blue-400' : 'text-purple-400'
+                        layer.type === 'text' ? 'text-blue-400' : layer.type === 'logo' ? 'text-purple-400' : 'text-green-400'
                       }`}>
-                        {layer.type === 'text' ? '📝' : '🖼️'}
+                        {layer.type === 'text' ? '📝' : layer.type === 'logo' ? '🖼️' : '⬜'}
                       </div>
 
                       {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm font-semibold text-gray-200">
-                            {layer.type === 'text' ? 'Text Layer' : 'Logo Layer'}
+                            {layer.type === 'text' ? 'Text Layer' : layer.type === 'logo' ? 'Logo Layer' : 'Shape Layer'}
                           </span>
                           {!isEnabled && (
                             <span className="text-xs px-2 py-0.5 bg-gray-700 text-gray-400 rounded">

@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Image from 'next/image';
 import { ProcessedImage, WatermarkLayer } from '@/lib/watermark/types';
-import { applyWatermarkLayers } from '@/lib/watermark/engine';
+import { renderWatermarkedCanvas, RenderOptions } from '@/lib/watermark/render';
+import { TextVariableContext } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
 
 interface PreviewGridProps {
@@ -48,6 +49,9 @@ export default function PreviewGrid({
       }
     }
 
+    // Clear cache when layers change to force regeneration
+    previewCacheRef.current = {};
+
     const controller = new AbortController();
     abortControllerRef.current = controller;
     generatingRef.current = true;
@@ -70,7 +74,27 @@ export default function PreviewGrid({
             return;
           }
 
-          const cacheKey = `${img.id}-${JSON.stringify(layersToUse)}`;
+          // Create a stable cache key that includes all layer properties
+          // Use a hash of the layers to detect changes
+          const layersHash = JSON.stringify(layersToUse.map(l => ({
+            id: l.id,
+            type: l.type,
+            enabled: l.enabled,
+            xNorm: l.xNorm,
+            yNorm: l.yNorm,
+            widthNorm: l.widthNorm,
+            fontSizeRelative: l.fontSizeRelative,
+            scale: l.scale,
+            rotation: l.rotation,
+            opacity: l.opacity,
+            text: l.text,
+            fontFamily: l.fontFamily,
+            color: l.color,
+            logoId: l.logoId,
+            scaleLocked: l.scaleLocked,
+            zIndex: l.zIndex,
+          })));
+          const cacheKey = `${img.id}-${layersHash}`;
 
           // Check cache first
           if (previewCacheRef.current[cacheKey]) {
@@ -79,13 +103,33 @@ export default function PreviewGrid({
           }
 
           try {
-            // Generate preview at reduced resolution for performance
-            const previewScale = 0.25; // 25% size for better performance with many images
-            const dataUrl = await applyWatermarkLayers(
+            // Generate preview at higher resolution to match main preview proportions
+            // Use 0.75 scale (75%) to maintain quality while keeping performance reasonable
+            // The normalized coordinates ensure correct positioning regardless of scale
+            const previewScale = 0.75; // 75% size for better quality and accurate proportions
+            
+            // Create variable context for preview (show what variables will look like)
+            const filename = img.originalFile.name.replace(/\.[^.]+$/, ''); // Remove extension
+            const imageIndex = images.indexOf(img);
+            const variableContext: TextVariableContext = {
+              filename,
+              index: imageIndex + 1, // 1-based index
+              date: new Date(),
+            };
+            
+            const renderOptions: RenderOptions = {
+              scale: previewScale,
+              returnDataUrl: true,
+              variableContext, // Pass context so variables are replaced in preview
+            };
+            
+            const dataUrl = await renderWatermarkedCanvas(
               img.originalDataUrl,
               layersToUse,
-              logoLibrary,
-              { scale: previewScale, returnDataUrl: true }
+              undefined, // Use image dimensions
+              undefined,
+              renderOptions,
+              logoLibrary
             ) as string;
 
             if (!controller.signal.aborted) {
@@ -117,10 +161,10 @@ export default function PreviewGrid({
       }
     };
 
-    // Debounce: wait 300ms before starting generation
+    // Reduced debounce: wait 150ms before starting generation for faster updates
     const timeoutId = setTimeout(() => {
       generatePreviews();
-    }, 300);
+    }, 150);
 
     return () => {
       clearTimeout(timeoutId);
@@ -169,7 +213,7 @@ export default function PreviewGrid({
                 handleImageSelect(img);
               }}
             >
-              <div className="relative aspect-square bg-gray-800">
+              <div className="relative bg-gray-800" style={{ aspectRatio: `${img.width} / ${img.height}` }}>
                 {previewUrl ? (
                   <Image
                     src={previewUrl}
@@ -178,6 +222,7 @@ export default function PreviewGrid({
                     className="object-contain"
                     loading="lazy"
                     unoptimized
+                    sizes="(max-width: 768px) 50vw, 33vw"
                   />
                 ) : hasError ? (
                   <div className="w-full h-full flex items-center justify-center">

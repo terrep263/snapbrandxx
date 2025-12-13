@@ -38,13 +38,20 @@ export enum TextAlign {
   RIGHT = 'right',
 }
 
+export enum ShapeType {
+  RECTANGLE = 'rectangle',
+  ROUNDED_RECTANGLE = 'rounded-rectangle',
+  CIRCLE = 'circle',
+  LINE = 'line',
+}
+
 /**
- * Unified WatermarkLayer model for both text and logo layers
+ * Unified WatermarkLayer model for text, logo, and shape layers
  */
 export interface WatermarkLayer {
   // Core properties
   id: string;
-  type: 'text' | 'logo';
+  type: 'text' | 'logo' | 'shape';
   zIndex: number; // Stacking order (lower = behind)
   enabled: boolean; // Can be toggled on/off (hidden if false)
   locked?: boolean; // If true, cannot be dragged/transformed (default: false)
@@ -96,6 +103,14 @@ export interface WatermarkLayer {
   boxColor?: string; // Box fill color (hex)
   boxPadding?: number; // Padding around logo in pixels
   boxBorderRadius?: number; // Border radius in pixels
+  
+  // Shape layer properties
+  shapeType?: ShapeType; // Type of shape: rectangle, rounded-rectangle, circle, line
+  fillColor?: string; // Fill color (hex)
+  fillOpacity?: number; // Fill opacity (0-1)
+  strokeColor?: string; // Border/stroke color (hex)
+  strokeWidth?: number; // Border thickness in pixels
+  cornerRadius?: number; // Corner radius for rounded rectangles (0-50)
 }
 
 /**
@@ -148,6 +163,25 @@ export interface LogoItem {
 }
 
 /**
+ * Tiling configuration for repeating watermarks
+ */
+export interface TilingConfig {
+  enabled: boolean;
+  spacing: number; // Space between tiles (0.1 = 10% of image size)
+  opacity: number; // Global opacity for tiles (0-1)
+  rotation: number; // Rotation for all tiles (-45 to 45 degrees)
+}
+
+/**
+ * Text variable context for batch processing
+ */
+export interface TextVariableContext {
+  filename: string;
+  index: number;
+  date: Date;
+}
+
+/**
  * Job State - Current watermarking job
  */
 export interface Job {
@@ -157,6 +191,7 @@ export interface Job {
   overrides: Record<string, WatermarkLayer[]>; // Per-image overrides: imageId -> layers
   brandProfileId?: string; // Associated brand profile
   templateId?: string; // Applied template
+  tiling?: TilingConfig; // Optional tiling configuration
   createdAt: number;
   updatedAt: number;
 }

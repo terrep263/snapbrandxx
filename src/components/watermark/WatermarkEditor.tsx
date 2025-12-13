@@ -43,6 +43,7 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
   const [zoom, setZoom] = useState(1);
+  const [snapToGuides, setSnapToGuides] = useState(true);
 
   // Initialize job when images change
   useEffect(() => {
@@ -235,9 +236,12 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
     }
   }, [selectedLayerId, isLayerGlobal, deleteLayer, selectLayer]);
 
-  // Handle layer grouping
+  // Handle layer grouping - link multiple layers together
   const handleGroupLayers = useCallback((layerIds: string[]) => {
-    if (layerIds.length < 2) return;
+    if (layerIds.length < 2) {
+      console.warn('Need at least 2 layers to link');
+      return;
+    }
     const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     layerIds.forEach(layerId => {
       const isGlobal = isLayerGlobal(layerId);
@@ -395,6 +399,8 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
                 selectedLayer={selectedLayer}
                 image={selectedImage}
                 onLayerUpdate={handleLayerUpdate}
+                snapToGuides={snapToGuides}
+                onSnapToGuidesChange={setSnapToGuides}
               />
             </div>
           </div>

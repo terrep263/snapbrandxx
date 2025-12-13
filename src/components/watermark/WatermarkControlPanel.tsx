@@ -37,6 +37,7 @@ export default function WatermarkControlPanel({
     deleteLayer,
     createDefaultTextLayer,
     createDefaultLogoLayer,
+    createDefaultShapeLayer,
     selectLayer,
     resetImageOverride,
     getLayersForImage,
@@ -60,6 +61,12 @@ export default function WatermarkControlPanel({
 
   const handleAddLogoLayer = (logoId: string) => {
     const layer = createDefaultLogoLayer(logoId);
+    addLayer(layer, true, selectedImageId || undefined);
+    selectLayer(layer.id);
+  };
+
+  const handleAddShapeLayer = (shapeType: string = 'rectangle') => {
+    const layer = createDefaultShapeLayer(shapeType);
     addLayer(layer, true, selectedImageId || undefined);
     selectLayer(layer.id);
   };
@@ -160,6 +167,7 @@ export default function WatermarkControlPanel({
               onLayerSelect={selectLayer}
               onAddTextLayer={handleAddTextLayer}
               onAddLogoLayer={handleAddLogoLayer}
+              onAddShapeLayer={handleAddShapeLayer}
               onDeleteLayer={handleDeleteLayer}
             />
 

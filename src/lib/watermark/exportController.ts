@@ -11,7 +11,7 @@
  * NEWLY CREATED for Sprint 4
  */
 
-import { ProcessedImage } from './types';
+import { ProcessedImage, TextVariableContext } from './types';
 import { WatermarkLayer } from './types';
 import { LogoItem } from '../logoLibrary';
 import { renderWatermarkedCanvas, RenderOptions } from './render';
@@ -42,6 +42,7 @@ export class ExportController {
   private abortController: AbortController | null = null;
   private isRunning = false;
   private currentResults: ExportResult[] = [];
+  private imagesForContext: ProcessedImage[] = [];
 
   constructor(options: ExportControllerOptions = {}) {
     this.concurrency = options.concurrency ?? 2;
@@ -57,6 +58,8 @@ export class ExportController {
     logoLibrary: Map<string, LogoItem>,
     options: RenderOptions
   ): Promise<ExportResult[]> {
+    // Store images array for variable context generation
+    this.imagesForContext = images;
     if (this.isRunning) {
       throw new Error('Export is already running');
     }
@@ -70,7 +73,8 @@ export class ExportController {
 
     this.updateProgress();
 
-    const queue = [...images];
+    // Create queue with indices
+    const queue = images.map((img, index) => ({ image: img, index }));
     const inProgress = new Set<string>();
     const completed = new Set<string>();
 
@@ -78,7 +82,7 @@ export class ExportController {
     while (queue.length > 0 || inProgress.size > 0) {
       if (this.abortController?.signal.aborted) {
         // Mark remaining as cancelled
-        queue.forEach(img => {
+        queue.forEach(({ image: img }) => {
           const result = this.currentResults.find(r => r.imageId === img.id);
           if (result && result.status === 'pending') {
             result.status = 'failed';
@@ -92,7 +96,7 @@ export class ExportController {
 
       // Start new jobs up to concurrency limit
       while (inProgress.size < this.concurrency && queue.length > 0) {
-        const image = queue.shift()!;
+        const { image, index: imageIndex } = queue.shift()!;
         inProgress.add(image.id);
 
         // Update status to processing
@@ -103,7 +107,7 @@ export class ExportController {
         }
 
         // Process image (don't await - let it run concurrently)
-        this.processImage(image, getLayersForImage, logoLibrary, options)
+        this.processImage(image, imageIndex, getLayersForImage, logoLibrary, options)
           .then((exportResult) => {
             inProgress.delete(image.id);
             completed.add(image.id);
@@ -147,6 +151,7 @@ export class ExportController {
    */
   private async processImage(
     image: ProcessedImage,
+    imageIndex: number,
     getLayersForImage: (imageId: string) => WatermarkLayer[],
     logoLibrary: Map<string, LogoItem>,
     options: RenderOptions
@@ -163,12 +168,26 @@ export class ExportController {
         };
       }
 
+      // Create variable context for this image
+      const filename = image.originalFile.name.replace(/\.[^.]+$/, ''); // Remove extension
+      const variableContext: TextVariableContext = {
+        filename,
+        index: imageIndex + 1, // 1-based index
+        date: new Date(),
+      };
+
+      // Add variable context to options
+      const optionsWithContext: RenderOptions = {
+        ...options,
+        variableContext,
+      };
+
       const blob = await renderWatermarkedCanvas(
         image.originalDataUrl,
         enabledLayers,
         undefined, // Use image dimensions
         undefined,
-        options,
+        optionsWithContext,
         logoLibrary
       ) as Blob;
 
@@ -265,7 +284,9 @@ export class ExportController {
           this.updateProgress();
         }
 
-        this.processImage(image, getLayersForImage, logoLibrary, options)
+        const imageIndex = failedImages.indexOf(image);
+        const originalIndex = this.imagesForContext.indexOf(image);
+        this.processImage(image, originalIndex >= 0 ? originalIndex : imageIndex, getLayersForImage, logoLibrary, options)
           .then((exportResult) => {
             inProgress.delete(image.id);
             completed.add(image.id);

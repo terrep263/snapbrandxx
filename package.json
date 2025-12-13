@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.2",
+    "@types/formidable": "^3.4.6",
+    "formidable": "^3.5.4",
     "jszip": "^3.10.1",
     "konva": "^9.2.3",
     "next": "14.2.5",
