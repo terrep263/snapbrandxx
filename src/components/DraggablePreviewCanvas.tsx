@@ -436,7 +436,7 @@ export default function DraggablePreviewCanvas({
       initialScale: node.scaleX(),
       initialRotation: node.rotation(),
       initialData,
-    } as any;
+    };
   }, [normalizedLayers]);
 
   // Handle transform (real-time scaling/rotation) - update linked layers in real-time
@@ -467,7 +467,7 @@ export default function DraggablePreviewCanvas({
     linkedLayers.forEach(linkedLayer => {
       const linkedNode = layerNodeRefs.current.get(linkedLayer.id);
       if (linkedNode && transformStartRef.current?.initialData) {
-        const initialData = (transformStartRef.current as any).initialData[linkedLayer.id];
+        const initialData = transformStartRef.current.initialData![linkedLayer.id];
         if (initialData) {
           // Apply same scale change proportionally from initial scale
           const newLinkedScale = clamp(initialData.scale * scaleDelta, 0.1, 10);
@@ -534,7 +534,7 @@ export default function DraggablePreviewCanvas({
         .filter(l => l.groupId === groupId && l.id !== layer.id)
         .forEach(groupLayer => {
           // Get initial scale from transform start data
-          const initialData = (transformStartRef.current as any)?.initialData?.[groupLayer.id];
+          const initialData = transformStartRef.current?.initialData?.[groupLayer.id];
           const groupInitialScale = initialData?.scale ?? (groupLayer.scale || 1);
           const groupInitialRotation = initialData?.rotation ?? (groupLayer.rotation || 0);
           
