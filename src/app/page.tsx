@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 export default function LandingPage() {
-  const gumroadUrl = process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_URL || 'https://gumroad.com/l/your-product';
+  const gumroadUrl = process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_URL || 'https://snapworxxbrand.gumroad.com/l/snapbrandxx';
 
   return (
     <div className="min-h-screen bg-white">
