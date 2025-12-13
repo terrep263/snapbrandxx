@@ -28,7 +28,7 @@ export default function StepHeader({ currentStep, onStepClick }: StepHeaderProps
                 disabled={step.number > currentStep}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded transition-colors ${
                   step.number === currentStep
-                    ? 'bg-primary text-white'
+                    ? 'bg-red-600 text-white'
                     : step.number < currentStep
                     ? 'bg-gray-800 text-gray-300 hover:bg-gray-700 cursor-pointer'
                     : 'bg-gray-800 text-gray-500 cursor-not-allowed'

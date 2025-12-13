@@ -537,6 +537,9 @@ async function renderLayer(
 /**
  * Apply watermarks to an image with configurable export options
  * 
+ * DEPRECATED: This function is kept for backward compatibility.
+ * New code should use renderWatermarkedCanvas from render.ts
+ * 
  * @param sourceImage - The source image (File, data URL, or HTMLImageElement)
  * @param layers - Array of WatermarkLayer objects (sorted by zIndex)
  * @param logoLibrary - Map of logoId to LogoItem for resolving logo images
@@ -549,74 +552,14 @@ export async function applyWatermarkLayers(
   logoLibrary: Map<string, LogoItem> = new Map(),
   options: ExportOptions = {}
 ): Promise<Blob | string> {
-  // Default options
-  const {
-    format = 'jpeg',
-    quality = 0.95,
-    scale = 1.0,
-    returnDataUrl = false
-  } = options;
-
-  // Load source image
-  const img = await loadImage(sourceImage);
-
-  // Create canvas
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Failed to get canvas context');
-  }
-
-  const width = Math.floor(img.width * scale);
-  const height = Math.floor(img.height * scale);
-  canvas.width = width;
-  canvas.height = height;
-
-  // Enable high-quality canvas rendering
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-
-  // Draw base image
-  ctx.drawImage(img, 0, 0, width, height);
-
-  // Sort layers by zIndex
-  const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
-
-  // Render each layer
-  for (const layer of sortedLayers) {
-    let logoImage: HTMLImageElement | null = null;
-    
-    if (layer.type === 'logo' && layer.logoId) {
-      const logoItem = logoLibrary.get(layer.logoId);
-      if (logoItem) {
-        logoImage = await logoItemToImage(logoItem);
-      }
-    }
-
-    await renderLayer(ctx, layer, width, height, logoImage, scale);
-  }
-
-  // Determine MIME type based on format
-  const mimeType = format === 'jpeg' ? 'image/jpeg'
-                 : format === 'png' ? 'image/png'
-                 : 'image/webp';
-
-  // Return result
-  if (returnDataUrl) {
-    return canvas.toDataURL(mimeType, quality);
-  } else {
-    return new Promise((resolve) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            throw new Error('Failed to create blob');
-          }
-        },
-        mimeType,
-        quality
-      );
-    });
-  }
+  // Re-export from new render module for consistency
+  const { renderWatermarkedCanvas } = await import('./render');
+  return renderWatermarkedCanvas(
+    sourceImage,
+    layers,
+    undefined, // Use image dimensions
+    undefined,
+    options,
+    logoLibrary
+  );
 }

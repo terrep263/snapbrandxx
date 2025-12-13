@@ -46,17 +46,26 @@ export interface WatermarkLayer {
   id: string;
   type: 'text' | 'logo';
   zIndex: number; // Stacking order (lower = behind)
-  enabled: boolean; // Can be toggled on/off
+  enabled: boolean; // Can be toggled on/off (hidden if false)
+  locked?: boolean; // If true, cannot be dragged/transformed (default: false)
   
-  // Positioning
-  anchor: Anchor;
-  offsetX: number; // Percentage of image width (-100 to 100)
-  offsetY: number; // Percentage of image height (-100 to 100)
+  // Positioning (NORMALIZED - Sprint 3)
+  anchor: Anchor; // Always CENTER for normalized coordinates
+  xNorm: number; // Normalized X position (0-1, center = 0.5)
+  yNorm: number; // Normalized Y position (0-1, center = 0.5)
+  
+  // Legacy support (will be migrated to xNorm/yNorm)
+  offsetX?: number; // Percentage of image width (-100 to 100) - DEPRECATED
+  offsetY?: number; // Percentage of image height (-100 to 100) - DEPRECATED
   
   // Transform
   scale: number; // Relative multiplier (0.2 to 3.0)
+  scaleLocked?: boolean; // NEW: Lock size relative to image (Sprint 3)
   rotation: number; // Rotation in degrees (0-360)
   opacity: number; // Opacity (0.0-1.0)
+  
+  // Grouping (Sprint 3)
+  groupId?: string | null; // Link layers together for movement/scale
   
   // Tiling (text only in MVP)
   tileMode: TileMode;
@@ -71,6 +80,7 @@ export interface WatermarkLayer {
   fontWeight?: string | number; // 'normal', 'bold', 100-900
   fontStyle?: string; // 'normal', 'italic'
   fontSizeRelative?: number; // Percentage of image height (e.g., 5 = 5% of image height)
+  textWidthPercent?: number; // Width of text container as % of image width (10-100, for wrapping)
   textAlign?: TextAlign;
   color?: string; // Primary color (hex)
   secondaryColor?: string; // For gradient effect (hex)
@@ -79,6 +89,8 @@ export interface WatermarkLayer {
   logoId?: string; // Reference to logo library
   naturalLogoWidth?: number; // Original logo width for scaling
   naturalLogoHeight?: number; // Original logo height for scaling
+  widthNorm?: number; // Normalized width (0-1, relative to image width) - Sprint 3
+  heightNorm?: number; // Normalized height (0-1, relative to image height) - Sprint 3
   backgroundBox?: boolean; // Draw box behind logo
   boxOpacity?: number; // Box opacity (0.0-1.0)
   boxColor?: string; // Box fill color (hex)

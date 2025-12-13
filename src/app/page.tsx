@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import StepHeader from '@/components/StepHeader';
 import Step1OrderImages from '@/components/Step1OrderImages';
 import WatermarkEditor from '@/components/watermark/WatermarkEditor';
@@ -20,6 +21,7 @@ export default function Home() {
   const [images, setImages] = useState<ProcessedImage[]>([]);
   const [currentStep, setCurrentStep] = useState(1);
   const [showFontLibrary, setShowFontLibrary] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Check authentication
   useEffect(() => {
@@ -32,6 +34,22 @@ export default function Home() {
       }
     }
   }, [router]);
+
+  // Guardrail 3: Editor State Protection - beforeunload warning
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
 
   const handleImagesUploaded = useCallback((newImages: ProcessedImage[]) => {
     setImages(newImages);
@@ -66,7 +84,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-dark-950 via-dark-900 to-dark-950 text-gray-100">
+    <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-dark-950 via-dark-900 to-dark-950 text-gray-100" style={{ height: '100vh', width: '100vw', overflow: 'hidden' }}>
       {/* Animated background pattern */}
       <div className="fixed inset-0 bg-grid-pattern opacity-30 pointer-events-none" />
       <div className="fixed inset-0 bg-gradient-radial from-primary-500/5 via-transparent to-transparent pointer-events-none" />
@@ -75,17 +93,19 @@ export default function Home() {
       <header className="relative z-10 backdrop-blur-xl bg-dark-900/80 border-b border-white/5 shadow-2xl">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Logo with glow effect */}
-            <div className="relative">
-              <div className="absolute inset-0 bg-primary-500/20 blur-xl rounded-full" />
-              <div className="relative w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center shadow-glow">
-                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
+            {/* Logo */}
+            <div className="relative w-12 h-12">
+              <Image
+                src="/logo.png"
+                alt="SnapBrandXX Logo"
+                width={48}
+                height={48}
+                className="object-contain"
+                unoptimized
+              />
             </div>
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">
                 SnapBrandXX
               </h1>
               <p className="text-sm text-dark-400 font-medium">Professional Watermarking Platform</p>

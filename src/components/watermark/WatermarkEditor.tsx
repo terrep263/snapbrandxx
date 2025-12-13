@@ -1,17 +1,21 @@
 /**
- * Professional Watermark Editor
+ * Professional Watermark Editor - Sprint 2
  * 
- * Three-pane layout: thumbnails | preview | controls
+ * Layout: Layers Panel | Canvas + Toolbar | Properties Panel
  */
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWatermark } from '@/lib/watermark/context';
-import { ProcessedImage } from '@/lib/watermark/types';
+import { ProcessedImage, WatermarkLayer, Anchor } from '@/lib/watermark/types';
+import { LogoItem } from '@/lib/logoLibrary';
 import ImageThumbnailList from './ImageThumbnailList';
-import WatermarkPreviewCanvas from './WatermarkPreviewCanvas';
-import WatermarkControlPanel from './WatermarkControlPanel';
+import LayersPanel from './LayersPanel';
+import EditorToolbar from './EditorToolbar';
+import DraggablePreviewCanvas from '../DraggablePreviewCanvas';
+import PropertiesPanel from './PropertiesPanel';
+import PreviewGridPanel from './PreviewGridPanel';
 
 interface WatermarkEditorProps {
   images: ProcessedImage[];
@@ -28,7 +32,17 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
     selectImage,
     selectLayer,
     getLayersForImage,
+    updateLayer,
+    addLayer,
+    deleteLayer,
+    logoLibrary,
+    createDefaultTextLayer,
+    createDefaultLogoLayer,
   } = useWatermark();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
+  const [zoom, setZoom] = useState(1);
 
   // Initialize job when images change
   useEffect(() => {
@@ -49,11 +63,266 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
     : images[0] || null;
 
   const currentLayers = selectedImageId ? getLayersForImage(selectedImageId) : [];
+  const selectedLayer = selectedLayerId
+    ? currentLayers.find(l => l.id === selectedLayerId) || null
+    : null;
+
+  // Determine if layer is global or per-image
+  const isLayerGlobal = useCallback((layerId: string) => {
+    if (!selectedImageId || !job) return true;
+    return !job.overrides[selectedImageId]?.some(ov => ov.id === layerId);
+  }, [selectedImageId, job]);
+
+  // Normalize zIndexes to be contiguous 0..n-1
+  const normalizeZIndexes = useCallback((layers: WatermarkLayer[]): WatermarkLayer[] => {
+    const sorted = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+    return sorted.map((layer, index) => ({
+      ...layer,
+      zIndex: index,
+    }));
+  }, []);
+
+  // Handle layer reorder
+  const handleLayerReorder = useCallback((layerId: string, direction: 'up' | 'down') => {
+    if (!selectedImageId || !job) return;
+
+    const isGlobal = isLayerGlobal(layerId);
+    const layers = isGlobal ? job.globalLayers : (job.overrides[selectedImageId] || []);
+    const layerIndex = layers.findIndex(l => l.id === layerId);
+    
+    if (layerIndex === -1) return;
+
+    const newLayers = [...layers];
+    if (direction === 'up' && layerIndex > 0) {
+      // Swap with previous
+      [newLayers[layerIndex - 1], newLayers[layerIndex]] = [newLayers[layerIndex], newLayers[layerIndex - 1]];
+    } else if (direction === 'down' && layerIndex < newLayers.length - 1) {
+      // Swap with next
+      [newLayers[layerIndex], newLayers[layerIndex + 1]] = [newLayers[layerIndex + 1], newLayers[layerIndex]];
+    }
+
+    // Normalize zIndexes
+    const normalized = normalizeZIndexes(newLayers);
+
+    if (isGlobal) {
+      // Update global layers
+      normalized.forEach(layer => {
+        updateLayer(layer.id, { zIndex: layer.zIndex }, true);
+      });
+    } else {
+      // Update per-image override
+      normalized.forEach(layer => {
+        updateLayer(layer.id, { zIndex: layer.zIndex }, false, selectedImageId);
+      });
+    }
+  }, [selectedImageId, job, isLayerGlobal, normalizeZIndexes, updateLayer]);
+
+  // Handle add text layer
+  const handleAddText = useCallback(() => {
+    if (!selectedImageId || !job) return;
+
+    const maxZIndex = currentLayers.length > 0
+      ? Math.max(...currentLayers.map(l => l.zIndex))
+      : -1;
+
+    const newLayer: WatermarkLayer = {
+      id: `text-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'text',
+      zIndex: maxZIndex + 1,
+      enabled: true,
+      locked: false,
+      anchor: Anchor.CENTER,
+      xNorm: 0.5, // Center of image
+      yNorm: 0.5,
+      offsetX: 0, // Legacy support
+      offsetY: 0,
+      scale: 1.25,
+      rotation: 0,
+      opacity: 0.8,
+      tileMode: 'none' as any,
+      effect: 'solid',
+      text: 'Your Text',
+      fontSizeRelative: 8, // Increased from 5 to 8% for better visibility
+      textWidthPercent: 50, // Default text width for wrapping
+      color: '#ffffff',
+      fontFamily: 'Inter',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textAlign: 'left' as any,
+    };
+
+    const isGlobal = !job.overrides[selectedImageId];
+    addLayer(newLayer, isGlobal, selectedImageId);
+    selectLayer(newLayer.id);
+  }, [selectedImageId, job, currentLayers, addLayer, selectLayer]);
+
+  // Handle add logo layer
+  const handleAddLogo = useCallback(async (logoId: string, logoItem?: LogoItem) => {
+    if (!selectedImageId || !job) return;
+
+    // Use provided logoItem if available (from upload), otherwise look it up
+    const logo = logoItem || logoLibrary.get(logoId);
+    if (!logo) {
+      alert('Logo not found');
+      return;
+    }
+
+    // Extract image dimensions from the logo's imageData
+    let naturalWidth = 100;
+    let naturalHeight = 100;
+    
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => {
+          naturalWidth = img.naturalWidth || img.width || 100;
+          naturalHeight = img.naturalHeight || img.height || 100;
+          resolve();
+        };
+        img.onerror = () => {
+          console.warn('Failed to load logo image for dimension extraction, using defaults');
+          resolve(); // Continue with defaults
+        };
+        img.src = logo.imageData;
+      });
+    } catch (error) {
+      console.warn('Error extracting logo dimensions:', error);
+      // Continue with defaults
+    }
+
+    const maxZIndex = currentLayers.length > 0
+      ? Math.max(...currentLayers.map(l => l.zIndex))
+      : -1;
+
+    const newLayer: WatermarkLayer = {
+      id: `logo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      type: 'logo',
+      zIndex: maxZIndex + 1,
+      enabled: true,
+      locked: false,
+      anchor: Anchor.CENTER,
+      xNorm: 0.5, // Center of image
+      yNorm: 0.5,
+      offsetX: 0, // Legacy support
+      offsetY: 0,
+      scale: 1.25, // Default scale for new logo layers
+      rotation: 0,
+      opacity: 0.9,
+      tileMode: 'none' as any,
+      effect: 'solid',
+      logoId: logo.id,
+      naturalLogoWidth: naturalWidth,
+      naturalLogoHeight: naturalHeight,
+    };
+
+    const isGlobal = !job.overrides[selectedImageId];
+    addLayer(newLayer, isGlobal, selectedImageId);
+    selectLayer(newLayer.id);
+  }, [selectedImageId, job, currentLayers, logoLibrary, addLayer, selectLayer]);
+
+  // Handle layer update
+  const handleLayerUpdate = useCallback((layerId: string, updates: Partial<WatermarkLayer>, isGlobalOverride?: boolean) => {
+    const isGlobal = isGlobalOverride !== undefined ? isGlobalOverride : isLayerGlobal(layerId);
+    updateLayer(layerId, updates, isGlobal, selectedImageId || undefined);
+  }, [selectedImageId, isLayerGlobal, updateLayer]);
+
+  // Handle layer delete
+  const handleLayerDelete = useCallback((layerId: string) => {
+    const isGlobal = isLayerGlobal(layerId);
+    deleteLayer(layerId, isGlobal, selectedImageId || undefined);
+    if (selectedLayerId === layerId) {
+      selectLayer(null);
+    }
+  }, [selectedLayerId, isLayerGlobal, deleteLayer, selectLayer]);
+
+  // Handle layer grouping
+  const handleGroupLayers = useCallback((layerIds: string[]) => {
+    if (layerIds.length < 2) return;
+    const groupId = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    layerIds.forEach(layerId => {
+      const isGlobal = isLayerGlobal(layerId);
+      handleLayerUpdate(layerId, { groupId }, isGlobal);
+    });
+  }, [isLayerGlobal, handleLayerUpdate]);
+
+  // Handle layer ungrouping
+  const handleUngroupLayer = useCallback((layerId: string) => {
+    const isGlobal = isLayerGlobal(layerId);
+    handleLayerUpdate(layerId, { groupId: null }, isGlobal);
+  }, [isLayerGlobal, handleLayerUpdate]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!selectedImage || !selectedLayer) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input/textarea/select
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable) {
+        return;
+      }
+
+      const nudgeAmount = e.shiftKey ? 10 : 1; // 10px with Shift, 1px without
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (selectedImage && selectedLayer) {
+            const dxPct = (nudgeAmount / selectedImage.width) * 100;
+            handleLayerUpdate(selectedLayer.id, { offsetX: selectedLayer.offsetX - dxPct });
+          }
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (selectedImage && selectedLayer) {
+            const dxPct = (nudgeAmount / selectedImage.width) * 100;
+            handleLayerUpdate(selectedLayer.id, { offsetX: selectedLayer.offsetX + dxPct });
+          }
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (selectedImage && selectedLayer) {
+            const dyPct = (nudgeAmount / selectedImage.height) * 100;
+            handleLayerUpdate(selectedLayer.id, { offsetY: selectedLayer.offsetY - dyPct });
+          }
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          if (selectedImage && selectedLayer) {
+            const dyPct = (nudgeAmount / selectedImage.height) * 100;
+            handleLayerUpdate(selectedLayer.id, { offsetY: selectedLayer.offsetY + dyPct });
+          }
+          break;
+        case 'Delete':
+        case 'Backspace':
+          e.preventDefault();
+          if (selectedLayer) {
+            handleLayerDelete(selectedLayer.id);
+          }
+          break;
+        case 'Escape':
+          e.preventDefault();
+          selectLayer(null);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImage, selectedLayer, handleLayerUpdate, handleLayerDelete, selectLayer]);
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-gray-800">
-      {/* Left: Image Thumbnails */}
-      <div className="w-64 border-r border-gray-700 bg-gray-900 overflow-y-auto flex-shrink-0 custom-scrollbar">
+    <div ref={containerRef} className="flex h-full w-full overflow-hidden bg-gray-800">
+      {/* Left: Image Thumbnails (always visible) */}
+      <div className="w-56 border-r border-gray-700 bg-gray-900 overflow-y-auto flex-shrink-0 custom-scrollbar" style={{ minWidth: '200px', maxWidth: '300px' }}>
+        <div className="p-2 border-b border-gray-700">
+          <button
+            onClick={() => setViewMode(viewMode === 'editor' ? 'preview' : 'editor')}
+            className="w-full px-3 py-2 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+          >
+            {viewMode === 'editor' ? '📋 Show All Previews' : '✏️ Back to Editor'}
+          </button>
+        </div>
         <ImageThumbnailList
           images={images}
           selectedImageId={selectedImageId}
@@ -61,34 +330,69 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
         />
       </div>
 
-      {/* Center: Preview Canvas */}
-      <div className="flex-1 flex flex-col overflow-hidden bg-gray-900 min-w-0 min-h-0">
-        {selectedImage ? (
-          <WatermarkPreviewCanvas
-            image={selectedImage}
-            layers={currentLayers}
-            selectedLayerId={selectedLayerId}
-            onLayerSelect={selectLayer}
-          />
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            Select an image to preview
+      {viewMode === 'editor' ? (
+        <>
+          {/* Center: Canvas with Toolbar */}
+          <div className="flex-1 flex flex-col overflow-hidden bg-gray-900 min-w-0 min-h-0">
+            <EditorToolbar onAddText={handleAddText} onAddLogo={handleAddLogo} />
+            {selectedImage ? (
+              <DraggablePreviewCanvas
+                image={selectedImage}
+                layers={currentLayers}
+                selectedLayerId={selectedLayerId}
+                onLayerSelect={selectLayer}
+                onLayerUpdate={(layer: WatermarkLayer) => {
+                  // Ensure anchor is CENTER for movable layers
+                  const updates: Partial<WatermarkLayer> = {
+                    ...layer,
+                    anchor: Anchor.CENTER, // Always use CENTER for absolute positioning
+                  };
+                  handleLayerUpdate(layer.id, updates);
+                }}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-500">
+                Select an image to preview
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Right: Control Panel */}
-      <div className="w-96 border-l border-gray-700 bg-gray-900 overflow-hidden flex-shrink-0 flex flex-col min-h-0">
-        <WatermarkControlPanel
-          selectedImage={selectedImage}
-          layers={currentLayers}
-          selectedLayerId={selectedLayerId}
-          onBack={onBack}
-          onNext={onNext}
-        />
-      </div>
+          {/* Right: Layers + Properties */}
+          <div className="flex border-l border-gray-700 flex-shrink-0">
+            {/* Layers Panel */}
+            <div className="w-64 border-r border-gray-700">
+              <LayersPanel
+                layers={currentLayers}
+                selectedLayerId={selectedLayerId}
+                onLayerSelect={selectLayer}
+                onLayerUpdate={handleLayerUpdate}
+                onLayerDelete={handleLayerDelete}
+                onLayerReorder={handleLayerReorder}
+                onGroupLayers={handleGroupLayers}
+                onUngroupLayer={handleUngroupLayer}
+              />
+            </div>
+
+            {/* Properties Panel */}
+            <div className="w-80">
+              <PropertiesPanel
+                selectedLayer={selectedLayer}
+                image={selectedImage}
+                onLayerUpdate={handleLayerUpdate}
+              />
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Preview Grid View */
+        <div className="flex-1 flex overflow-hidden">
+          <PreviewGridPanel
+            images={images}
+            selectedImageId={selectedImageId}
+            onImageSelect={selectImage}
+          />
+        </div>
+      )}
     </div>
   );
 }
-
-

@@ -1,7 +1,7 @@
 /**
- * Image Thumbnail List with Watermarked Previews
+ * Preview Grid Panel
  * 
- * Shows all images with watermarks applied for quick preview
+ * Shows all images with watermarks applied in a grid view
  */
 
 'use client';
@@ -12,17 +12,17 @@ import { ProcessedImage } from '@/lib/watermark/types';
 import { useWatermark } from '@/lib/watermark/context';
 import { applyWatermarkLayers } from '@/lib/watermark/engine';
 
-interface ImageThumbnailListProps {
+interface PreviewGridPanelProps {
   images: ProcessedImage[];
   selectedImageId: string | null;
   onImageSelect: (imageId: string) => void;
 }
 
-export default function ImageThumbnailList({
+export default function PreviewGridPanel({
   images,
   selectedImageId,
   onImageSelect,
-}: ImageThumbnailListProps) {
+}: PreviewGridPanelProps) {
   const { job, logoLibrary, getLayersForImage } = useWatermark();
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [generating, setGenerating] = useState(false);
@@ -47,7 +47,7 @@ export default function ImageThumbnailList({
 
     const generatePreviews = async () => {
       const newPreviews: Record<string, string> = {};
-      const batchSize = 5; // Process 5 images at a time
+      const batchSize = 3; // Process 3 images at a time for grid (larger previews)
 
       for (let i = 0; i < images.length; i += batchSize) {
         if (controller.signal.aborted) break;
@@ -58,24 +58,24 @@ export default function ImageThumbnailList({
             const layers = getLayersForImage(img.id);
             const enabledLayers = layers.filter(l => l.enabled);
 
-            // Create cache key based on image and layers
+            // Create cache key
             const cacheKey = `${img.id}-${JSON.stringify(enabledLayers.map(l => ({ id: l.id, offsetX: l.offsetX, offsetY: l.offsetY, scale: l.scale, rotation: l.rotation, opacity: l.opacity })))}`;
 
-            // Check cache first
+            // Check cache
             if (previewCacheRef.current[cacheKey]) {
               newPreviews[img.id] = previewCacheRef.current[cacheKey];
               return;
             }
 
-            // If no layers, use original image
+            // If no layers, use original
             if (enabledLayers.length === 0) {
               newPreviews[img.id] = img.originalDataUrl;
               previewCacheRef.current[cacheKey] = img.originalDataUrl;
               return;
             }
 
-            // Generate watermarked preview at reduced resolution for performance
-            const previewScale = 0.2; // 20% size for thumbnails
+            // Generate watermarked preview at 40% for grid view
+            const previewScale = 0.4;
             const dataUrl = await applyWatermarkLayers(
               img.originalDataUrl,
               enabledLayers,
@@ -90,7 +90,6 @@ export default function ImageThumbnailList({
           } catch (error) {
             if (error instanceof Error && error.name !== 'AbortError') {
               console.error('Error generating preview for', img.id, error);
-              // Fallback to original image on error
               newPreviews[img.id] = img.originalDataUrl;
             }
           }
@@ -103,8 +102,7 @@ export default function ImageThumbnailList({
           setPreviewUrls((prev) => ({ ...prev, ...newPreviews }));
         }
 
-        // Yield to event loop between batches
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       if (!controller.signal.aborted) {
@@ -112,10 +110,10 @@ export default function ImageThumbnailList({
       }
     };
 
-    // Debounce: wait 300ms before starting generation
+    // Debounce: wait 500ms before starting
     const timeoutId = setTimeout(() => {
       generatePreviews();
-    }, 300);
+    }, 500);
 
     return () => {
       clearTimeout(timeoutId);
@@ -124,66 +122,60 @@ export default function ImageThumbnailList({
     };
   }, [images, job, logoLibrary, getLayersForImage]);
 
-  const hasOverride = (imageId: string): boolean => {
-    return job?.overrides[imageId] !== undefined;
-  };
-
   return (
-    <div className="p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-300">Images ({images.length})</h2>
-        {generating && (
-          <div className="text-xs text-gray-500">Generating previews...</div>
-        )}
+    <div className="h-full flex flex-col bg-gray-900 border-l border-gray-700">
+      <div className="p-4 border-b border-gray-700 flex-shrink-0">
+        <h3 className="text-sm font-semibold text-gray-200">All Previews</h3>
+        <p className="text-xs text-gray-400 mt-1">
+          {generating ? 'Generating previews...' : `${images.length} image${images.length !== 1 ? 's' : ''}`}
+        </p>
       </div>
-      <div className="space-y-2">
-        {images.map((image) => {
-          const isSelected = image.id === selectedImageId;
-          const isOverridden = hasOverride(image.id);
-          const previewUrl = previewUrls[image.id] || image.originalDataUrl;
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
+        <div className="grid grid-cols-2 gap-4">
+          {images.map((image) => {
+            const isSelected = image.id === selectedImageId;
+            const previewUrl = previewUrls[image.id] || image.originalDataUrl;
+            const isLoading = !previewUrls[image.id] && generating;
 
-          return (
-            <div
-              key={image.id}
-              className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
-                isSelected
-                  ? 'border-red-500 shadow-lg'
-                  : 'border-gray-700 hover:border-gray-600'
-              }`}
-              onClick={() => onImageSelect(image.id)}
-            >
-              <div className="relative w-full h-32">
-                <Image
-                  src={previewUrl}
-                  alt={image.originalFile.name}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-                {!previewUrls[image.id] && generating && (
-                  <div className="absolute inset-0 bg-gray-900/50 flex items-center justify-center">
-                    <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-                  </div>
+            return (
+              <div
+                key={image.id}
+                className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all ${
+                  isSelected
+                    ? 'border-red-500 shadow-lg'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+                onClick={() => onImageSelect(image.id)}
+              >
+                <div className="relative w-full aspect-square">
+                  <Image
+                    src={previewUrl}
+                    alt={image.originalFile.name}
+                    fill
+                    className="object-contain bg-gray-800"
+                    unoptimized
+                  />
+                  {isLoading && (
+                    <div className="absolute inset-0 bg-gray-900/70 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-2">
+                  <p className="text-xs text-white truncate">{image.originalFile.name}</p>
+                  <p className="text-xs text-gray-400">
+                    {image.width} × {image.height}px
+                  </p>
+                </div>
+                {isSelected && (
+                  <div className="absolute inset-0 border-2 border-red-500 pointer-events-none" />
                 )}
               </div>
-              {isOverridden && (
-                <div className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded">
-                  Custom
-                </div>
-              )}
-              <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-2">
-                <p className="text-xs text-white truncate">{image.originalFile.name}</p>
-                <p className="text-xs text-gray-400">
-                  {image.width} × {image.height}px
-                </p>
-              </div>
-              {isSelected && (
-                <div className="absolute inset-0 border-2 border-red-500 pointer-events-none" />
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
+

@@ -32,3 +32,4 @@ CREATE INDEX IF NOT EXISTS idx_fonts_created_at ON fonts(created_at DESC);
 -- CREATE POLICY "Fonts are deletable by authenticated users" ON fonts FOR DELETE USING (true);
 
 
+

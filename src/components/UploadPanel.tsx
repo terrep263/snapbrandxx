@@ -130,7 +130,7 @@ export default function UploadPanel({ images, onImagesChange }: UploadPanelProps
           onDragLeave={handleDragLeave}
           className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
             isDragging
-              ? 'border-primary bg-primary/10'
+              ? 'border-red-500 bg-red-500/10'
               : 'border-gray-600 bg-gray-800/50 hover:border-gray-500'
           }`}
         >
@@ -138,7 +138,7 @@ export default function UploadPanel({ images, onImagesChange }: UploadPanelProps
           <p className="text-xs text-gray-500 mb-3">or</p>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded transition-colors"
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors"
           >
             Select images
           </button>
@@ -159,7 +159,7 @@ export default function UploadPanel({ images, onImagesChange }: UploadPanelProps
             </p>
             <button
               onClick={handleClearAll}
-              className="text-xs text-accent hover:text-accent/80 transition-colors"
+              className="text-xs text-red-400 hover:text-red-300 transition-colors"
             >
               Clear All
             </button>
@@ -194,7 +194,7 @@ export default function UploadPanel({ images, onImagesChange }: UploadPanelProps
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-300 truncate">{img.originalFile.name}</p>
                   {img.error ? (
-                    <p className="text-xs text-accent">{img.error}</p>
+                    <p className="text-xs text-red-400">{img.error}</p>
                   ) : (
                     <p className="text-xs text-gray-500">
                       {img.width} × {img.height}
@@ -203,7 +203,7 @@ export default function UploadPanel({ images, onImagesChange }: UploadPanelProps
                 </div>
                 <button
                   onClick={() => handleRemoveImage(img.id)}
-                  className="text-xs text-gray-500 hover:text-accent transition-colors"
+                  className="text-xs text-gray-500 hover:text-red-400 transition-colors"
                 >
                   ×
                 </button>

@@ -40,6 +40,7 @@ export default function WatermarkPreviewCanvas({
   const [layerDragStart, setLayerDragStart] = useState({ offsetX: 0, offsetY: 0, mouseX: 0, mouseY: 0 });
   const [isResizing, setIsResizing] = useState(false);
   const [resizeStart, setResizeStart] = useState({ x: 0, y: 0, scale: 1 });
+  const [hoveredLayerId, setHoveredLayerId] = useState<string | null>(null);
 
   const getAnchorPoint = (anchor: Anchor, width: number, height: number) => {
     switch (anchor) {
@@ -70,22 +71,44 @@ export default function WatermarkPreviewCanvas({
     let contentOffsetY = 0;
 
     if (layer.type === 'text' && layer.text) {
-      // Measure text
+      // Measure text - use a larger canvas for accurate measurement
       const fontSizeRelative = layer.fontSizeRelative || 5;
       const fontSize = (imageHeight * fontSizeRelative / 100) * layer.scale;
+      
+      // Create a temporary canvas for text measurement
       const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = imageWidth;
+      tempCanvas.height = imageHeight;
       const tempCtx = tempCanvas.getContext('2d');
+      
       if (tempCtx) {
-        tempCtx.font = `${fontSize}px ${layer.fontFamily || 'Inter'}`;
+        // Set font with all properties
+        const fontWeight = layer.fontWeight || 'normal';
+        const fontStyle = layer.fontStyle || 'normal';
+        tempCtx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${layer.fontFamily || 'Inter'}`;
+        
         const metrics = tempCtx.measureText(layer.text);
-        layerWidth = metrics.width;
+        layerWidth = Math.max(metrics.width, fontSize * 0.5); // Minimum width
+        layerHeight = fontSize * 1.2;
+        
+        // Text alignment affects offset
+        if (layer.textAlign === 'center') {
+          contentOffsetX = -layerWidth / 2;
+        } else if (layer.textAlign === 'right') {
+          contentOffsetX = -layerWidth;
+        } else {
+          contentOffsetX = 0; // left (default)
+        }
+        contentOffsetY = -fontSize * 0.2; // Baseline adjustment
+      } else {
+        // Fallback if canvas context fails
+        layerWidth = layer.text.length * fontSize * 0.6;
         layerHeight = fontSize * 1.2;
         contentOffsetX = 0;
         contentOffsetY = -fontSize * 0.2;
       }
     } else if (layer.type === 'logo') {
       // Get actual logo dimensions
-      // Use stored natural dimensions if available, otherwise use defaults
       const naturalWidth = layer.naturalLogoWidth || 100;
       const naturalHeight = layer.naturalLogoHeight || 100;
       
@@ -321,11 +344,14 @@ export default function WatermarkPreviewCanvas({
       
       const bounds = getLayerBounds(layer, imageWidth, imageHeight);
       
+      // Add padding for easier clicking, especially for text layers
+      const padding = layer.type === 'text' ? Math.max(5, bounds.height * 0.1) : 2;
+      
       if (
-        imageCoords.x >= bounds.x &&
-        imageCoords.x <= bounds.x + bounds.width &&
-        imageCoords.y >= bounds.y &&
-        imageCoords.y <= bounds.y + bounds.height
+        imageCoords.x >= bounds.x - padding &&
+        imageCoords.x <= bounds.x + bounds.width + padding &&
+        imageCoords.y >= bounds.y - padding &&
+        imageCoords.y <= bounds.y + bounds.height + padding
       ) {
         return layer.id;
       }
@@ -366,6 +392,12 @@ export default function WatermarkPreviewCanvas({
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
+    // Update hover state for cursor feedback
+    if (!isDraggingLayer && !isDragging) {
+      const hitLayerId = hitTestLayer(e.clientX, e.clientY);
+      setHoveredLayerId(hitLayerId);
+    }
+    
     if (isDraggingLayer && draggedLayerId) {
       // Drag layer
       const layer = layers.find(l => l.id === draggedLayerId);
@@ -381,12 +413,93 @@ export default function WatermarkPreviewCanvas({
       const deltaOffsetX = (deltaX / image.width) * 100;
       const deltaOffsetY = (deltaY / image.height) * 100;
       
-      // Update layer position
-      const newOffsetX = layerDragStart.offsetX + deltaOffsetX;
-      const newOffsetY = layerDragStart.offsetY + deltaOffsetY;
+      // Calculate new position
+      let newOffsetX = layerDragStart.offsetX + deltaOffsetX;
+      let newOffsetY = layerDragStart.offsetY + deltaOffsetY;
+      
+      // Apply hard limits to keep layer within image bounds
+      const anchorPoint = getAnchorPoint(layer.anchor, image.width, image.height);
+      
+      // Get layer bounds with the new offset to check if it stays within bounds
+      const tempLayer = { ...layer, offsetX: newOffsetX, offsetY: newOffsetY };
+      const bounds = getLayerBounds(tempLayer, image.width, image.height);
+      
+      // Calculate limits based on layer size and anchor position
+      if (bounds.width > 0 && bounds.height > 0) {
+        // Calculate the maximum offset that keeps the layer within bounds
+        // For X: layer left edge (bounds.x) must be >= 0, right edge must be <= image.width
+        // For Y: layer top edge (bounds.y) must be >= 0, bottom edge must be <= image.height
+        
+        // Calculate how much we can offset from anchor point
+        // Left limit: anchorPoint.x + offsetX + contentOffsetX >= 0
+        // Right limit: anchorPoint.x + offsetX + contentOffsetX + width <= image.width
+        
+        // Get content offset (how layer is positioned relative to anchor)
+        let contentOffsetX = 0;
+        let contentOffsetY = 0;
+        
+        if (layer.type === 'text' && layer.text) {
+          const fontSizeRelative = layer.fontSizeRelative || 5;
+          const fontSize = (image.height * fontSizeRelative / 100) * layer.scale;
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = image.width;
+          tempCanvas.height = image.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          if (tempCtx) {
+            const fontWeight = layer.fontWeight || 'normal';
+            const fontStyle = layer.fontStyle || 'normal';
+            tempCtx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${layer.fontFamily || 'Inter'}`;
+            const metrics = tempCtx.measureText(layer.text);
+            const layerWidth = Math.max(metrics.width, fontSize * 0.5);
+            if (layer.textAlign === 'center') {
+              contentOffsetX = -layerWidth / 2;
+            } else if (layer.textAlign === 'right') {
+              contentOffsetX = -layerWidth;
+            }
+            contentOffsetY = -fontSize * 0.2;
+          }
+        } else if (layer.type === 'logo') {
+          const naturalWidth = layer.naturalLogoWidth || 100;
+          const naturalHeight = layer.naturalLogoHeight || 100;
+          const layerWidth = naturalWidth * layer.scale;
+          const layerHeight = naturalHeight * layer.scale;
+          contentOffsetX = -layerWidth / 2;
+          contentOffsetY = -layerHeight / 2;
+        }
+        
+        // Calculate min/max offsets in pixels
+        // Min X: anchorPoint.x + minOffsetX + contentOffsetX >= 0
+        // => minOffsetX >= -anchorPoint.x - contentOffsetX
+        const minOffsetXPixels = -anchorPoint.x - contentOffsetX;
+        
+        // Max X: anchorPoint.x + maxOffsetX + contentOffsetX + width <= image.width
+        // => maxOffsetX <= image.width - anchorPoint.x - contentOffsetX - width
+        const maxOffsetXPixels = image.width - anchorPoint.x - contentOffsetX - bounds.width;
+        
+        // Min Y: anchorPoint.y + minOffsetY + contentOffsetY >= 0
+        // => minOffsetY >= -anchorPoint.y - contentOffsetY
+        const minOffsetYPixels = -anchorPoint.y - contentOffsetY;
+        
+        // Max Y: anchorPoint.y + maxOffsetY + contentOffsetY + height <= image.height
+        // => maxOffsetY <= image.height - anchorPoint.y - contentOffsetY - height
+        const maxOffsetYPixels = image.height - anchorPoint.y - contentOffsetY - bounds.height;
+        
+        // Convert to percentage
+        const minOffsetXPercent = (minOffsetXPixels / image.width) * 100;
+        const maxOffsetXPercent = (maxOffsetXPixels / image.width) * 100;
+        const minOffsetYPercent = (minOffsetYPixels / image.height) * 100;
+        const maxOffsetYPercent = (maxOffsetYPixels / image.height) * 100;
+        
+        // Clamp to limits
+        newOffsetX = Math.max(minOffsetXPercent, Math.min(maxOffsetXPercent, newOffsetX));
+        newOffsetY = Math.max(minOffsetYPercent, Math.min(maxOffsetYPercent, newOffsetY));
+      } else {
+        // Fallback: limit to reasonable bounds
+        newOffsetX = Math.max(-100, Math.min(100, newOffsetX));
+        newOffsetY = Math.max(-100, Math.min(100, newOffsetY));
+      }
       
       // Determine if this is a global layer or per-image override
-      // If the layer is in the override for this image, it's not global
       const isGlobal = !selectedImageId || !job?.overrides[selectedImageId]?.some(ov => ov.id === draggedLayerId);
       
       updateLayer(
@@ -409,6 +522,14 @@ export default function WatermarkPreviewCanvas({
     setIsDraggingLayer(false);
     setDraggedLayerId(null);
     setIsResizing(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+    setIsDraggingLayer(false);
+    setDraggedLayerId(null);
+    setIsResizing(false);
+    setHoveredLayerId(null);
   };
 
   // Zoom controls
@@ -494,12 +615,20 @@ export default function WatermarkPreviewCanvas({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       >
         {image && previewImageRef.current ? (
           <canvas
             ref={canvasRef}
-            className={isDraggingLayer ? "cursor-grabbing" : "cursor-default"}
+            className={
+              isDraggingLayer 
+                ? "cursor-grabbing" 
+                : hoveredLayerId 
+                  ? "cursor-grab" 
+                  : zoom !== 'fit' 
+                    ? "cursor-move" 
+                    : "cursor-default"
+            }
             style={{ maxWidth: '100%', maxHeight: '100%' }}
           />
         ) : image ? (

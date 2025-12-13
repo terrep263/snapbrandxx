@@ -40,7 +40,7 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-gray-900">
       <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 w-full max-w-md">
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-primary mb-2">SnapBrandXX Ops</h1>
+          <h1 className="text-2xl font-bold text-red-500 mb-2">SnapBrandXX Ops</h1>
           <p className="text-sm text-gray-400">Admin Access Required</p>
         </div>
 
@@ -54,7 +54,7 @@ export default function LoginPage() {
                 setPassword(e.target.value);
                 setError('');
               }}
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded text-gray-100 focus:outline-none focus:border-primary"
+              className="w-full px-4 py-3 bg-gray-900 border border-gray-600 rounded text-gray-100 focus:outline-none focus:border-red-500"
               placeholder="Enter admin password"
               autoFocus
               disabled={isLoading}
@@ -70,7 +70,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isLoading || !password}
-            className="w-full px-4 py-3 bg-primary hover:bg-primary-dark disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded transition-colors"
+            className="w-full px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded transition-colors"
           >
             {isLoading ? 'Authenticating...' : 'Access Tool'}
           </button>

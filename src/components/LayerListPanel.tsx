@@ -50,14 +50,14 @@ export default function LayerListPanel({
         <div className="flex gap-1">
           <button
             onClick={onAddTextLayer}
-            className="px-2 py-1 text-xs bg-primary hover:bg-primary-dark text-white rounded transition-colors"
+            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
             title="Add Text Layer"
           >
             +T
           </button>
           <button
             onClick={handleAddLogoClick}
-            className="px-2 py-1 text-xs bg-primary hover:bg-primary-dark text-white rounded transition-colors"
+            className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
             title="Add Logo Layer from Library"
           >
             +L
@@ -77,7 +77,7 @@ export default function LayerListPanel({
               onClick={() => onLayerSelect(layer.id === selectedLayerId ? null : layer.id)}
               className={`w-full text-left px-3 py-2 rounded text-xs transition-colors ${
                 layer.id === selectedLayerId
-                  ? 'bg-primary text-white'
+                  ? 'bg-red-600 text-white'
                   : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
               }`}
             >

@@ -12,8 +12,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" style={{ height: '100%', overflow: 'hidden' }}>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      </head>
+      <body style={{ height: '100%', overflow: 'hidden', margin: 0, padding: 0 }}>{children}</body>
     </html>
   );
 }

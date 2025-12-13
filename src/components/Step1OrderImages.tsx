@@ -67,8 +67,8 @@ export default function Step1OrderImages({
           </div>
 
           {showAdvanceMessage && (
-            <div className="mb-6 p-4 bg-primary/20 border border-primary rounded-lg">
-              <p className="text-primary text-sm font-medium">
+            <div className="mb-6 p-4 bg-red-500/20 border border-red-500 rounded-lg">
+              <p className="text-red-500 text-sm font-medium">
                 ✓ Images added! Opening editor...
               </p>
             </div>
@@ -107,7 +107,7 @@ export default function Step1OrderImages({
             <div className="mt-8 flex justify-center">
               <button
                 onClick={handleManualContinue}
-                className="px-8 py-3 bg-primary hover:bg-primary-dark text-white font-medium rounded-lg transition-colors"
+                className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
               >
                 Continue to Editor →
               </button>

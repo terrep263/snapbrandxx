@@ -176,7 +176,7 @@ export default function Step2Editor({
         <button
           onClick={onNext}
           disabled={globalLayers.length === 0}
-          className="px-4 py-2 bg-primary hover:bg-primary-dark disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors"
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded transition-colors"
         >
           Next → Export
         </button>
@@ -214,7 +214,7 @@ export default function Step2Editor({
                     onDoubleClick={() => setEditingImageId(image.id)}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedImageId === image.id
-                        ? 'border-primary bg-primary/10'
+                        ? 'border-red-500 bg-red-500/10'
                         : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                     }`}
                   >
@@ -231,7 +231,7 @@ export default function Step2Editor({
                     </div>
                     <p className="text-xs text-gray-400 truncate mb-1">{image.originalFile.name}</p>
                     {hasOverrides && (
-                      <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
+                      <span className="text-xs bg-red-500/20 text-red-500 px-2 py-0.5 rounded">
                         Custom
                       </span>
                     )}
@@ -255,7 +255,7 @@ export default function Step2Editor({
                 </div>
                 <button
                   onClick={() => setEditingImageId(selectedImage.id)}
-                  className="px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm rounded transition-colors"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
                 >
                   Edit Layers
                 </button>
