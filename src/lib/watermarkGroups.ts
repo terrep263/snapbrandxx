@@ -28,6 +28,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         zIndex: 0,
         enabled: true,
         anchor: Anchor.CENTER,
+        xNorm: 0.5, // Center horizontally
+        yNorm: 0.6, // Slightly below center (offsetY: 10% = 0.6)
         offsetX: 0,
         offsetY: 10,
         scale: 1.0,
@@ -45,6 +47,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         zIndex: 1,
         enabled: true,
         anchor: Anchor.CENTER,
+        xNorm: 0.5, // Center horizontally
+        yNorm: 0.55, // Slightly below center (offsetY: 5% = 0.55)
         offsetX: 0,
         offsetY: 5,
         scale: 1.0,
@@ -63,6 +67,8 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         zIndex: 2,
         enabled: true,
         anchor: Anchor.CENTER,
+        xNorm: 0.5, // Center horizontally
+        yNorm: 0.45, // Slightly above center (offsetY: -5% = 0.45)
         offsetX: 0,
         offsetY: -5,
         scale: 1.0,
@@ -88,7 +94,9 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         type: 'text',
         zIndex: 0,
         enabled: true,
-        anchor: Anchor.BOTTOM_RIGHT,
+        anchor: Anchor.CENTER,
+        xNorm: 0.95, // Bottom-right area
+        yNorm: 0.75, // Higher up (offsetY: -25% from bottom = 0.75)
         offsetX: -5,
         offsetY: -25,
         scale: 1.0,
@@ -106,7 +114,9 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         type: 'text',
         zIndex: 1,
         enabled: true,
-        anchor: Anchor.BOTTOM_RIGHT,
+        anchor: Anchor.CENTER,
+        xNorm: 0.95, // Bottom-right area
+        yNorm: 0.95, // Bottom area (offsetY: -5% from bottom = 0.95)
         offsetX: -5,
         offsetY: -5,
         scale: 1.0,
@@ -132,7 +142,9 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         type: 'logo',
         zIndex: 0,
         enabled: true,
-        anchor: Anchor.BOTTOM_RIGHT,
+        anchor: Anchor.CENTER,
+        xNorm: 0.95, // Bottom-right area
+        yNorm: 0.95, // Bottom area
         offsetX: -5,
         offsetY: -5,
         scale: 1.0,
@@ -157,7 +169,9 @@ const BUILT_IN_GROUPS: WatermarkGroup[] = [
         type: 'text',
         zIndex: 0,
         enabled: true,
-        anchor: Anchor.BOTTOM_RIGHT,
+        anchor: Anchor.CENTER,
+        xNorm: 0.95, // Bottom-right area
+        yNorm: 0.95, // Bottom area
         offsetX: -5,
         offsetY: -5,
         scale: 1.0,

@@ -3,14 +3,17 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import StepHeader from '@/components/StepHeader';
 import Step1OrderImages from '@/components/Step1OrderImages';
-import WatermarkEditor from '@/components/watermark/WatermarkEditor';
-import Step3Export from '@/components/Step3Export';
 import FontLibrary from '@/components/FontLibrary';
 import { ProcessedImage } from '@/lib/watermark/types';
 import { WatermarkProvider } from '@/lib/watermark';
 import { isAuthenticated, logout } from '@/lib/auth';
+
+// Dynamically import components that use canvas/browser APIs to prevent SSR issues
+const WatermarkEditor = dynamic(() => import('@/components/watermark/WatermarkEditor'), { ssr: false });
+const Step3Export = dynamic(() => import('@/components/Step3Export'), { ssr: false });
 
 export default function Home() {
   const router = useRouter();

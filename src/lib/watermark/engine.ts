@@ -256,8 +256,8 @@ async function renderTextLayer(
   if (!layer.text) return;
 
   const anchorPoint = getAnchorPoint(layer.anchor, canvasWidth, canvasHeight);
-  const offsetX = (layer.offsetX / 100) * canvasWidth;
-  const offsetY = (layer.offsetY / 100) * canvasHeight;
+  const offsetX = ((layer.offsetX ?? 0) / 100) * canvasWidth;
+  const offsetY = ((layer.offsetY ?? 0) / 100) * canvasHeight;
   const baseX = anchorPoint.x + offsetX;
   const baseY = anchorPoint.y + offsetY;
 
@@ -313,8 +313,8 @@ async function renderLogoLayer(
   if (!logoImage) return;
 
   const anchorPoint = getAnchorPoint(layer.anchor, canvasWidth, canvasHeight);
-  const offsetX = (layer.offsetX / 100) * canvasWidth;
-  const offsetY = (layer.offsetY / 100) * canvasHeight;
+  const offsetX = ((layer.offsetX ?? 0) / 100) * canvasWidth;
+  const offsetY = ((layer.offsetY ?? 0) / 100) * canvasHeight;
   const baseX = anchorPoint.x + offsetX;
   const baseY = anchorPoint.y + offsetY;
 
@@ -432,8 +432,8 @@ async function renderTiledText(
     for (let y = 0; y < canvasHeight + spacingY; y += spacingY) {
       for (let x = 0; x < canvasWidth + spacingX; x += spacingX) {
         const anchorPoint = getAnchorPoint(layer.anchor, 0, 0);
-        const offsetX = (layer.offsetX / 100) * canvasWidth;
-        const offsetY = (layer.offsetY / 100) * canvasHeight;
+        const offsetX = ((layer.offsetX ?? 0) / 100) * canvasWidth;
+        const offsetY = ((layer.offsetY ?? 0) / 100) * canvasHeight;
         const baseX = anchorPoint.x + offsetX + x;
         const baseY = anchorPoint.y + offsetY + y;
 
@@ -475,8 +475,8 @@ async function renderTiledText(
       const y = d * Math.sin(angle);
 
       const anchorPoint = getAnchorPoint(layer.anchor, 0, 0);
-      const offsetX = (layer.offsetX / 100) * canvasWidth;
-      const offsetY = (layer.offsetY / 100) * canvasHeight;
+      const offsetX = ((layer.offsetX ?? 0) / 100) * canvasWidth;
+      const offsetY = ((layer.offsetY ?? 0) / 100) * canvasHeight;
       const baseX = anchorPoint.x + offsetX + x;
       const baseY = anchorPoint.y + offsetY + y;
 

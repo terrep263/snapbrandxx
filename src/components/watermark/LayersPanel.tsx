@@ -50,6 +50,17 @@ export default function LayersPanel({
     onLayerReorder(layer.id, direction);
   };
 
+  const handleGroup = () => {
+    if (!onGroupLayers || !selectedLayerId) return;
+    // For now, just group the selected layer with itself (can be extended later)
+    onGroupLayers([selectedLayerId]);
+  };
+
+  const handleUngroup = (layer: WatermarkLayer) => {
+    if (!onUngroupLayer) return;
+    onUngroupLayer(layer.id);
+  };
+
   return (
     <div className="h-full flex flex-col bg-gray-900 border-r border-gray-700">
       {/* Header */}

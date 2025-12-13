@@ -264,28 +264,28 @@ export default function LayerEditorSection({ layer, onUpdate }: LayerEditorSecti
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Horizontal Offset: {layer.offsetX.toFixed(1)}%
+                  Horizontal Offset: {(layer.offsetX ?? 0).toFixed(1)}%
                 </label>
                 <input
                   type="range"
                   min="-100"
                   max="100"
                   step="0.5"
-                  value={layer.offsetX}
+                  value={layer.offsetX ?? 0}
                   onChange={(e) => onUpdate({ offsetX: parseFloat(e.target.value) })}
                   className="w-full"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Vertical Offset: {layer.offsetY.toFixed(1)}%
+                  Vertical Offset: {(layer.offsetY ?? 0).toFixed(1)}%
                 </label>
                 <input
                   type="range"
                   min="-100"
                   max="100"
                   step="0.5"
-                  value={layer.offsetY}
+                  value={layer.offsetY ?? 0}
                   onChange={(e) => onUpdate({ offsetY: parseFloat(e.target.value) })}
                   className="w-full"
                 />

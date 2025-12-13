@@ -268,29 +268,33 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
         case 'ArrowLeft':
           e.preventDefault();
           if (selectedImage && selectedLayer) {
-            const dxPct = (nudgeAmount / selectedImage.width) * 100;
-            handleLayerUpdate(selectedLayer.id, { offsetX: selectedLayer.offsetX - dxPct });
+            const dxNorm = nudgeAmount / selectedImage.width;
+            const currentXNorm = selectedLayer.xNorm ?? 0.5;
+            handleLayerUpdate(selectedLayer.id, { xNorm: Math.max(0, currentXNorm - dxNorm), anchor: Anchor.CENTER });
           }
           break;
         case 'ArrowRight':
           e.preventDefault();
           if (selectedImage && selectedLayer) {
-            const dxPct = (nudgeAmount / selectedImage.width) * 100;
-            handleLayerUpdate(selectedLayer.id, { offsetX: selectedLayer.offsetX + dxPct });
+            const dxNorm = nudgeAmount / selectedImage.width;
+            const currentXNorm = selectedLayer.xNorm ?? 0.5;
+            handleLayerUpdate(selectedLayer.id, { xNorm: Math.min(1, currentXNorm + dxNorm), anchor: Anchor.CENTER });
           }
           break;
         case 'ArrowUp':
           e.preventDefault();
           if (selectedImage && selectedLayer) {
-            const dyPct = (nudgeAmount / selectedImage.height) * 100;
-            handleLayerUpdate(selectedLayer.id, { offsetY: selectedLayer.offsetY - dyPct });
+            const dyNorm = nudgeAmount / selectedImage.height;
+            const currentYNorm = selectedLayer.yNorm ?? 0.5;
+            handleLayerUpdate(selectedLayer.id, { yNorm: Math.max(0, currentYNorm - dyNorm), anchor: Anchor.CENTER });
           }
           break;
         case 'ArrowDown':
           e.preventDefault();
           if (selectedImage && selectedLayer) {
-            const dyPct = (nudgeAmount / selectedImage.height) * 100;
-            handleLayerUpdate(selectedLayer.id, { offsetY: selectedLayer.offsetY + dyPct });
+            const dyNorm = nudgeAmount / selectedImage.height;
+            const currentYNorm = selectedLayer.yNorm ?? 0.5;
+            handleLayerUpdate(selectedLayer.id, { yNorm: Math.min(1, currentYNorm + dyNorm), anchor: Anchor.CENTER });
           }
           break;
         case 'Delete':

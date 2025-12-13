@@ -463,6 +463,11 @@ export async function renderWatermarkedCanvas(
   const width = outWidth ?? Math.floor(img.width * scale);
   const height = outHeight ?? Math.floor(img.height * scale);
 
+  // Ensure we're in a browser environment
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new Error('renderWatermarkedCanvas can only be called in the browser');
+  }
+
   // Create canvas
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');

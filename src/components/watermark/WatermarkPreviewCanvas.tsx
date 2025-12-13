@@ -59,8 +59,8 @@ export default function WatermarkPreviewCanvas({
     imageHeight: number
   ) => {
     const anchorPoint = getAnchorPoint(layer.anchor, imageWidth, imageHeight);
-    const offsetX = (layer.offsetX / 100) * imageWidth;
-    const offsetY = (layer.offsetY / 100) * imageHeight;
+    const offsetX = ((layer.offsetX ?? 0) / 100) * imageWidth;
+    const offsetY = ((layer.offsetY ?? 0) / 100) * imageHeight;
     const baseX = anchorPoint.x + offsetX;
     const baseY = anchorPoint.y + offsetY;
 
@@ -372,8 +372,8 @@ export default function WatermarkPreviewCanvas({
         setIsDraggingLayer(true);
         setDraggedLayerId(hitLayerId);
         setLayerDragStart({
-          offsetX: layer.offsetX,
-          offsetY: layer.offsetY,
+          offsetX: layer.offsetX ?? 0,
+          offsetY: layer.offsetY ?? 0,
           mouseX: e.clientX,
           mouseY: e.clientY,
         });

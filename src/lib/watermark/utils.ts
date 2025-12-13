@@ -77,7 +77,7 @@ export function migrateLayerToNorm(layer: WatermarkLayer): WatermarkLayer {
   }
 
   // Migrate from offsetX/offsetY to xNorm/yNorm
-  const { xNorm, yNorm } = legacyOffsetsToNorm(layer.offsetX, layer.offsetY);
+  const { xNorm, yNorm } = legacyOffsetsToNorm(layer.offsetX ?? 0, layer.offsetY ?? 0);
   
   const migrated = {
     ...layer,

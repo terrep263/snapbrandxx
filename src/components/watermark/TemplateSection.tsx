@@ -28,8 +28,10 @@ export default function TemplateSection() {
           type: 'logo',
           zIndex: 1,
           enabled: true,
-          anchor: 'BOTTOM_RIGHT' as any,
-          offsetX: -5,
+          anchor: 'CENTER' as any,
+          xNorm: 0.95, // Bottom-right area
+          yNorm: 0.95,
+          offsetX: -5, // Legacy support
           offsetY: -5,
           scale: 0.15,
           rotation: 0,
@@ -50,8 +52,10 @@ export default function TemplateSection() {
           type: 'text',
           zIndex: 1,
           enabled: true,
-          anchor: 'BOTTOM_LEFT' as any,
-          offsetX: 50,
+          anchor: 'CENTER' as any,
+          xNorm: 0.5, // Center horizontally
+          yNorm: 0.95, // Bottom area
+          offsetX: 50, // Legacy support
           offsetY: -5,
           scale: 1.0,
           rotation: 0,

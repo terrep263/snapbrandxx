@@ -60,10 +60,12 @@ export default function ImageDetailEditor({
       type: 'text',
       zIndex: maxZIndex + 1,
       enabled: true,
-      anchor: Anchor.BOTTOM_RIGHT,
-      offsetX: -5,
+      anchor: Anchor.CENTER,
+      xNorm: 0.5, // Center of image
+      yNorm: 0.5,
+      offsetX: -5, // Legacy support
       offsetY: -5,
-      scale: 1.0,
+      scale: 1.25, // Default scale
       rotation: 0,
       opacity: 0.7,
       tileMode: TileMode.NONE,
@@ -93,10 +95,12 @@ export default function ImageDetailEditor({
       type: 'logo',
       zIndex: maxZIndex + 1,
       enabled: true,
-      anchor: Anchor.BOTTOM_RIGHT,
-      offsetX: -5,
+      anchor: Anchor.CENTER,
+      xNorm: 0.5, // Center of image
+      yNorm: 0.5,
+      offsetX: -5, // Legacy support
       offsetY: -5,
-      scale: 1.0,
+      scale: 1.25, // Default scale
       rotation: 0,
       opacity: 0.7,
       tileMode: TileMode.NONE,
