@@ -106,6 +106,7 @@ export default function DraggablePreviewCanvas({
     layerId: string;
     initialScale: number;
     initialRotation: number;
+    initialData?: { [key: string]: { scale: number; rotation: number } };
   } | null>(null);
   
   const DRAG_DEAD_ZONE = 5; // pixels
