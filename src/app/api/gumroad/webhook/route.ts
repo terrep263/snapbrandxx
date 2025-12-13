@@ -74,9 +74,19 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Get raw body for signature verification
+    // Get raw body text (form-encoded, not JSON)
     const rawBody = await request.text();
-    const body = JSON.parse(rawBody);
+    
+    // Parse form-encoded data
+    const params = new URLSearchParams(rawBody);
+    
+    // Convert to object
+    const data: Record<string, string> = {};
+    for (const [key, value] of params.entries()) {
+      data[key] = value;
+    }
+    
+    console.log('Gumroad webhook received:', data);
     
     // Optional: Verify signature from header (if Gumroad sends it)
     const signature = request.headers.get('x-gumroad-signature');
@@ -91,6 +101,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
+    // Extract key fields from form data
     const {
       sale_id,
       email,
@@ -98,7 +109,9 @@ export async function POST(request: NextRequest) {
       seller_id,
       refunded,
       disputed,
-    } = body;
+      price,
+      currency,
+    } = data;
 
     // Normalize email to lowercase
     const normalizedEmail = email?.toLowerCase().trim();
@@ -111,14 +124,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle refunds and chargebacks
-    if (refunded === 'true' || refunded === true || disputed === 'true' || disputed === true) {
+    // Gumroad sends "true" or "false" as strings
+    const isRevoked = refunded === 'true' || disputed === 'true';
+    
+    if (isRevoked) {
+      // Update or create entitlement with revoked status
       const { error } = await supabaseAdmin
         .from('entitlements')
-        .update({
-          status: 'revoked',
-          revoked_at: new Date().toISOString(),
-        })
-        .eq('gumroad_order_id', sale_id);
+        .upsert(
+          {
+            email: normalizedEmail,
+            status: 'revoked',
+            gumroad_order_id: sale_id,
+            revoked_at: new Date().toISOString(),
+            purchased_at: null, // Clear purchase date on revocation
+          },
+          {
+            onConflict: 'email',
+          }
+        );
 
       if (error) {
         console.error('Error revoking entitlement:', error);
@@ -128,12 +152,12 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      console.log(`Webhook processed: ${normalizedEmail} - revoked (sale_id: ${sale_id})`);
+      console.log(`Entitlement revoked for ${normalizedEmail} (sale_id: ${sale_id})`);
       return NextResponse.json({ success: true, action: 'revoked' });
     }
 
     // Handle new purchase
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('entitlements')
       .upsert(
         {
@@ -141,6 +165,7 @@ export async function POST(request: NextRequest) {
           status: 'licensed',
           gumroad_order_id: sale_id,
           purchased_at: new Date().toISOString(),
+          revoked_at: null, // Clear revocation date on new purchase
         },
         {
           onConflict: 'email',
@@ -168,7 +193,7 @@ export async function POST(request: NextRequest) {
         .eq('email', normalizedEmail);
     }
 
-    console.log(`Webhook processed: ${normalizedEmail} - licensed (sale_id: ${sale_id})`);
+    console.log(`Entitlement licensed for ${normalizedEmail} (sale_id: ${sale_id})`);
     return NextResponse.json({ success: true, action: 'licensed' });
   } catch (error) {
     console.error('Gumroad webhook error:', error);
