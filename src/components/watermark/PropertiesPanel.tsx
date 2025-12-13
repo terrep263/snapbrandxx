@@ -16,6 +16,8 @@ interface PropertiesPanelProps {
   selectedLayer: WatermarkLayer | null;
   image: ProcessedImage | null;
   onLayerUpdate: (layerId: string, updates: Partial<WatermarkLayer>) => void;
+  snapToGuides?: boolean;
+  onSnapToGuidesChange?: (enabled: boolean) => void;
 }
 
 export default function PropertiesPanel({

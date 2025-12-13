@@ -24,11 +24,7 @@ export function normalizeLayersForSave(
       // Ensure fontSizeRelative is set
       const normalized = {
         ...layer,
-        fontSizeRelative: layer.fontSizeRelative ?? (
-          layer.fontSize 
-            ? fontSizeToRelative(layer.fontSize, canvasHeight)
-            : 0.05 // Default 5%
-        ),
+        fontSizeRelative: layer.fontSizeRelative ?? 0.05, // Default 5%
       };
 
       // For logo layers, ensure widthNorm is set if scaleLocked
@@ -57,11 +53,7 @@ export function normalizeLayersForSave(
     }
 
     // Calculate fontSizeRelative
-    const fontSizeRelative = layer.fontSizeRelative ?? (
-      layer.fontSize 
-        ? fontSizeToRelative(layer.fontSize, canvasHeight)
-        : 0.05 // Default 5%
-    );
+    const fontSizeRelative = layer.fontSizeRelative ?? 0.05; // Default 5%
 
     const normalized: WatermarkLayer = {
       ...layer,
@@ -97,28 +89,19 @@ export function denormalizeLayersForImage(
     // Convert normalized to pixels
     const { x, y } = normToScreen(xNorm, yNorm, targetImageWidth, targetImageHeight);
 
-    // Convert fontSizeRelative to pixels
+    // Convert fontSizeRelative to pixels (for rendering, but don't store in layer)
     const fontSizeRelative = layer.fontSizeRelative ?? 0.05;
-    const fontSize = fontSizeToPixels(fontSizeRelative, targetImageHeight);
 
     const denormalized: WatermarkLayer = {
       ...layer,
-      x,
-      y,
-      fontSize,
       // Keep normalized coords for future use
       xNorm,
       yNorm,
+      fontSizeRelative,
     };
 
-    // For logo layers, convert widthNorm to pixels if present
-    if (layer.type === 'logo' && layer.widthNorm !== undefined) {
-      denormalized.width = layer.widthNorm * targetImageWidth;
-      if (layer.naturalLogoWidth && layer.naturalLogoHeight) {
-        const aspectRatio = layer.naturalLogoHeight / layer.naturalLogoWidth;
-        denormalized.height = denormalized.width * aspectRatio;
-      }
-    }
+    // Note: widthNorm is already normalized, no need to convert to pixels
+    // The rendering engine will use widthNorm directly
 
     return denormalized;
   });

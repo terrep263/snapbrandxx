@@ -198,10 +198,10 @@ async function renderTextLayer(
   const textAlign = layer.textAlign || TextAlign.LEFT;
 
   // If text width is specified, we need to measure and wrap
-    if (textWidth && textWidth > 0) {
-      // Measure text to determine if wrapping is needed
-      ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${fontFamily}"`;
-      const metrics = ctx.measureText(text);
+  if (textWidth && textWidth > 0) {
+    // Measure text to determine if wrapping is needed
+    ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${fontFamily}"`;
+    const metrics = ctx.measureText(layer.text);
     
     if (metrics.width > textWidth) {
       // Simple word wrapping
@@ -209,7 +209,7 @@ async function renderTextLayer(
       const lines: string[] = [];
       let currentLine = '';
 
-      for (const word of text.split(' ')) {
+      for (const word of layer.text.split(' ')) {
         const testLine = currentLine ? `${currentLine} ${word}` : word;
         const testMetrics = ctx.measureText(testLine);
         
@@ -251,7 +251,7 @@ async function renderTextLayer(
       // Adjust y position to center text vertically (accounting for textBaseline='top')
       await renderTextWithEffect(
         ctx,
-        text,
+        layer.text,
         0,
         -fontSize / 2, // Center vertically (textBaseline='top', so offset by half font size)
         fontSize,
@@ -269,7 +269,7 @@ async function renderTextLayer(
     // Adjust y position to center text vertically (accounting for textBaseline='top')
     await renderTextWithEffect(
       ctx,
-      text,
+      layer.text,
       0,
       -fontSize / 2, // Center vertically (textBaseline='top', so offset by half font size)
       fontSize,
@@ -567,7 +567,7 @@ async function renderLayer(
 
   if (normalizedLayer.type === 'text') {
     if (normalizedLayer.tileMode === TileMode.NONE) {
-      await renderTextLayer(ctx, normalizedLayer, canvasWidth, canvasHeight, scale, variableContext);
+      await renderTextLayer(ctx, normalizedLayer, canvasWidth, canvasHeight, scale);
     }
     // TODO: Support tiling in future sprint
   } else if (normalizedLayer.type === 'logo') {
@@ -632,7 +632,7 @@ async function applyTiledWatermark(
         const normalizedLayer = migrateLayerToNorm(layer);
         
         if (normalizedLayer.type === 'text') {
-          await renderTextLayer(ctx, normalizedLayer, tileWidth, tileHeight, tileScale * scale, variableContext);
+          await renderTextLayer(ctx, normalizedLayer, tileWidth, tileHeight, tileScale * scale);
         } else if (normalizedLayer.type === 'logo') {
           const logoId = normalizedLayer.logoId;
           const logoItem = logoId ? logoLibrary.get(logoId) : null;
