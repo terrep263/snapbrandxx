@@ -19,6 +19,8 @@ interface DraggablePreviewCanvasProps {
   zoom?: number;
   onZoomChange?: (zoom: number) => void;
   onFitToView?: () => void;
+  snapToGuides?: boolean; // External control for snap toggle
+  onSnapToGuidesChange?: (enabled: boolean) => void; // Callback for external control
 }
 
 // Helper: Get anchor point coordinates
