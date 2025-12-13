@@ -60,61 +60,59 @@ export default function EditorToolbar({
 
   return (
     <>
-      <div className="px-4 py-2 border-b border-gray-700 bg-gray-900 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onAddText}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors flex items-center gap-2"
+        >
+          <span>+</span>
+          <span>Add Text</span>
+        </button>
+        <button
+          onClick={handleAddLogoClick}
+          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors flex items-center gap-2"
+        >
+          <span>+</span>
+          <span>Add Logo</span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/svg+xml,image/jpeg"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+      </div>
+
+      {/* Zoom Controls */}
+      {onZoomChange && onFitToView && (
         <div className="flex items-center gap-2">
           <button
-            onClick={onAddText}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors flex items-center gap-2"
+            onClick={() => onZoomChange(Math.max(0.25, zoom - 0.1))}
+            className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded"
+            title="Zoom Out"
           >
-            <span>+</span>
-            <span>Add Text</span>
+            −
+          </button>
+          <span className="text-xs text-gray-400 font-mono min-w-[3rem] text-center">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            onClick={() => onZoomChange(Math.min(2.0, zoom + 0.1))}
+            className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded"
+            title="Zoom In"
+          >
+            +
           </button>
           <button
-            onClick={handleAddLogoClick}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded transition-colors flex items-center gap-2"
+            onClick={onFitToView}
+            className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded"
+            title="Fit to View"
           >
-            <span>+</span>
-            <span>Add Logo</span>
+            Fit
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/svg+xml,image/jpeg"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
         </div>
-
-        {/* Zoom Controls */}
-        {onZoomChange && onFitToView && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => onZoomChange(Math.max(0.25, zoom - 0.1))}
-              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded"
-              title="Zoom Out"
-            >
-              −
-            </button>
-            <span className="text-xs text-gray-400 font-mono min-w-[3rem] text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => onZoomChange(Math.min(2.0, zoom + 0.1))}
-              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded"
-              title="Zoom In"
-            >
-              +
-            </button>
-            <button
-              onClick={onFitToView}
-              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded"
-              title="Fit to View"
-            >
-              Fit
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Logo Picker Modal */}
       {showLogoPicker && (

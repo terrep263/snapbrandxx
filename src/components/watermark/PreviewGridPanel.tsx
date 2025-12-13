@@ -58,8 +58,8 @@ export default function PreviewGridPanel({
             const layers = getLayersForImage(img.id);
             const enabledLayers = layers.filter(l => l.enabled);
 
-            // Create cache key
-            const cacheKey = `${img.id}-${JSON.stringify(enabledLayers.map(l => ({ id: l.id, offsetX: l.offsetX, offsetY: l.offsetY, scale: l.scale, rotation: l.rotation, opacity: l.opacity })))}`;
+            // Create cache key using normalized coordinates
+            const cacheKey = `${img.id}-${JSON.stringify(enabledLayers.map(l => ({ id: l.id, xNorm: l.xNorm, yNorm: l.yNorm, scale: l.scale, rotation: l.rotation, opacity: l.opacity, widthNorm: l.widthNorm })))}`;
 
             // Check cache
             if (previewCacheRef.current[cacheKey]) {

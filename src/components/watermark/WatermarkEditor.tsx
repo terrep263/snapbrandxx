@@ -338,7 +338,19 @@ export default function WatermarkEditor({ images, onBack, onNext }: WatermarkEdi
         <>
           {/* Center: Canvas with Toolbar */}
           <div className="flex-1 flex flex-col overflow-hidden bg-gray-900 min-w-0 min-h-0">
-            <EditorToolbar onAddText={handleAddText} onAddLogo={handleAddLogo} />
+            <div className="px-4 py-2 border-b border-gray-700 bg-gray-900 flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <EditorToolbar onAddText={handleAddText} onAddLogo={handleAddLogo} />
+              </div>
+              {onNext && (
+                <button
+                  onClick={onNext}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded transition-colors flex items-center gap-2 flex-shrink-0"
+                >
+                  <span>Next → Export</span>
+                </button>
+              )}
+            </div>
             {selectedImage ? (
               <DraggablePreviewCanvas
                 image={selectedImage}
